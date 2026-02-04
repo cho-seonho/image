@@ -8,9 +8,10 @@ import time
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 기존 UI 보존 및 사진 움직임 방지 ---
+# --- CSS: 기존 UI 보존, 사진 움직임 방지 및 모바일 2열(Grid) 적용 ---
 st.markdown("""
     <style>
+    /* 상단 UI 고정 */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
         top: 0;
@@ -20,6 +21,8 @@ st.markdown("""
         box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
         border-bottom: 1px solid #e1e4e8;
     }
+
+    /* 이미지 카드 및 흔들림 방지 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
@@ -33,6 +36,8 @@ st.markdown("""
         filter: blur(5px) grayscale(40%);
         transition: filter 0.2s ease-in-out;
     }
+
+    /* 버튼 및 파란색 선택 UI */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
@@ -49,7 +54,6 @@ st.markdown("""
         justify-content: center;
         margin-top: 0px !important;
         background-color: white;
-        transition: background-color 0.2s;
     }
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
         background-color: #2196F3 !important;
@@ -59,11 +63,28 @@ st.markdown("""
         color: white !important;
         font-weight: bold !important;
     }
+
+    /* [핵심] 모바일 전용: 결과창 2열 배치 및 보기 버튼 삭제 */
     @media (max-width: 768px) {
         div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) { position: relative !important; box-shadow: none !important; }
+        
+        /* 결과 그리드를 2열로 강제 조정 (33% -> 50%) */
+        [data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            width: calc(50% - 1rem) !important;
+            flex: 1 1 calc(50% - 1rem) !important;
+            min-width: calc(50% - 1rem) !important;
+        }
+        
+        /* 모바일 보기 버튼 컬럼 완전 삭제 */
         div[data-testid="column"]:has(button[key^="btn_"]) { display: none !important; }
+        
+        /* 선택 버튼을 100% 채우기 */
         div[data-testid="column"]:has(div[data-testid="stCheckbox"]) { width: 100% !important; flex: 1 1 100% !important; }
+        
+        /* 카드 패딩 조절로 공간 확보 */
+        .image-card-container { padding: 8px; margin-bottom: 10px; }
     }
+
     .source-label { font-size: 0.85rem; color: #666; margin: 10px 0; font-weight: bold; }
     .stImage img { border-radius: 12px; }
     </style>
@@ -89,7 +110,7 @@ with st.container():
     
     c1, c2 = st.columns([3, 1])
     query = c1.text_input("검색어", placeholder="검색어를 입력하세요", label_visibility="collapsed")
-    ratio = c2.selectbox("비율", ["가로형", "세로형", "정사각형"], key="orient_select", label_visibility="collapsed")
+    ratio_sel = c2.selectbox("비율", ["가로형", "세로형", "정사각형"], key="orient_select", label_visibility="collapsed")
     
     with st.expander("⚙️ 고급 필터", expanded=False):
         f1, f2, f3 = st.columns(3)
@@ -124,16 +145,16 @@ with st.container():
             with zipfile.ZipFile(zip_buf, "w") as zf:
                 for i, si in enumerate(temp_sel):
                     try:
-                        # [파일명 복구] 출처_검색어_숫자_날짜_시간
+                        # [파일명 규격 유지] 출처_검색어_숫자_날짜_시간
                         file_name = f"{si['source']}_{query.replace(' ','_')}_{i+1:02d}_{now_str}.jpg"
                         zf.writestr(file_name, requests.get(si['orig']).content)
                     except: continue
             inf3.download_button(f"📥 {len(temp_sel)}장 다운로드", zip_buf.getvalue(), f"{query}_{now_str}.zip", use_container_width=True, key="top_dl")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 결과 출력 ---
+# --- 결과 출력 (모바일 2열 배치) ---
 if st.session_state['results']:
-    cols = st.columns(3)
+    cols = st.columns(3) # 웹에서는 3열
     for idx, img in enumerate(st.session_state['results']):
         with cols[idx % 3]:
             st.markdown('<div class="image-card-container">', unsafe_allow_html=True)
