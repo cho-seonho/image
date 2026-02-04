@@ -6,17 +6,21 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 버튼 칼정렬 및 선택 시 이미지 블러 효과 ---
+# --- CSS: 상단 음영 추가 및 버튼/이미지 스타일 ---
 st.markdown("""
     <style>
-    /* 1. 상단 고정 레이아웃 */
+    /* 1. 상단 고정 레이아웃 및 음영(Shadow) 추가 */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
         top: 2.8rem;
         background-color: white;
         z-index: 999;
         padding-top: 10px;
-        border-bottom: 2px solid #f0f2f6;
+        padding-bottom: 15px;
+        /* 아래 검색 결과와 구별되도록 강한 음영 추가 */
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
+        border-bottom: 1px solid #e1e4e8;
+        margin-bottom: 20px;
     }
 
     /* 2. 일체형 둥근 카드 박스 */
@@ -26,23 +30,20 @@ st.markdown("""
         padding: 15px;
         margin-bottom: 20px;
         background-color: #ffffff;
-        display: flex;
-        flex-direction: column;
     }
 
-    /* 3. [핵심] 이미지 블러 효과 - 선택 시 흐려짐 */
+    /* 3. 선택 시 이미지 블러 효과 */
     .selected-img img {
-        filter: blur(4px) grayscale(30%);
+        filter: blur(5px) grayscale(40%);
         transition: filter 0.3s ease;
     }
 
-    /* 4. 보기/선택 버튼 높이 칼정렬 (45px 고정) */
+    /* 4. 보기/선택 버튼 높이 칼정렬 (45px) */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
         font-weight: bold !important;
         width: 100% !important;
-        margin: 0 !important;
     }
 
     div[data-testid="stCheckbox"] {
@@ -54,10 +55,10 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-top: 0px !important; /* 위쪽 여백 제거로 버튼과 라인 맞춤 */
+        margin-top: 0px !important;
     }
     
-    /* 선택 시 체크박스 배경 파란색으로 변경 */
+    /* 선택 시 체크박스 배경 변화 */
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
         background-color: #2196F3 !important;
         border-color: #2196F3 !important;
@@ -92,7 +93,7 @@ def show_full_image(img_url, source):
     st.write(f"출처: **{source}**")
     st.image(img_url, use_container_width=True)
 
-# --- 상단 UI ---
+# --- 상단 UI (음영 영역) ---
 with st.container():
     st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
     st.title("📸 이미지 수집기 Pro")
@@ -146,16 +147,12 @@ if st.session_state['results']:
         
         with cols[idx % 3]:
             st.markdown('<div class="image-card-container">', unsafe_allow_html=True)
-            
-            # 선택 여부에 따라 'selected-img' 클래스 부여 (블러 처리용)
             img_class = "selected-img" if is_this_selected else ""
             st.markdown(f'<div class="{img_class}">', unsafe_allow_html=True)
             st.image(img['url'], use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
-            
             st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
             
-            # 버튼 영역 (수평 정렬)
             b_col1, b_col2 = st.columns(2)
             with b_col1:
                 if st.button("🔍 보기", key=f"btn_{idx}"):
@@ -165,6 +162,7 @@ if st.session_state['results']:
                     selected_images.append(img)
             st.markdown('</div>', unsafe_allow_html=True)
 
+    # [핵심 수정] 다운로드 시 파일명에 출처 명시 복구
     if selected_images:
         sel_info.write(f"📍 **{len(selected_images)}**장 선택됨")
         with dl_btn:
@@ -173,6 +171,7 @@ if st.session_state['results']:
                 for i, si in enumerate(selected_images):
                     try:
                         res = requests.get(si['orig'], timeout=10)
-                        zf.writestr(f"img_{i+1}.jpg", res.content)
+                        # 파일명 예시: 01_Pexels.jpg
+                        zf.writestr(f"{i+1:02d}_{si['source']}.jpg", res.content)
                     except: continue
-            st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name="images.zip")
+            st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_이미지수집.zip")
