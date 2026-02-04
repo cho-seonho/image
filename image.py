@@ -16,32 +16,32 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 스트림릿 Secrets에서 API 키 불러오기
+# API 키 불러오기
 try:
     PEXELS_API_KEY = st.secrets["PEXELS_API_KEY"]
     PIXABAY_API_KEY = st.secrets["PIXABAY_API_KEY"]
 except:
-    st.error("⚠️ API 키가 설정되지 않았습니다. Streamlit Cloud의 Secrets 설정을 확인해주세요.")
+    st.error("⚠️ API 키가 설정되지 않았습니다. Streamlit Secrets를 확인해주세요.")
     st.stop()
 
-# --- 비율 변경 시 해상도를 자동으로 업데이트하는 함수 ---
-def update_resolution():
-    orient = st.session_state.orient_select
-    if orient == "가로형":
-        st.session_state.width_val = 1920
-        st.session_state.height_val = 1080
-    elif orient == "세로형":
-        st.session_state.width_val = 1080
-        st.session_state.height_val = 1920
-    elif orient == "정사각형":
-        st.session_state.width_val = 1080
-        st.session_state.height_val = 1080
+# --- 세션 상태 초기화 및 해상도 업데이트 로직 ---
+if 'width_input' not in st.session_state:
+    st.session_state['width_input'] = 1920
+if 'height_input' not in st.session_state:
+    st.session_state['height_input'] = 1080
 
-# 초기 세션 상태 설정
-if 'width_val' not in st.session_state:
-    st.session_state.width_val = 1920
-if 'height_val' not in st.session_state:
-    st.session_state.height_val = 1080
+def on_ratio_change():
+    """비율 선택 시 세션 상태의 해상도 값을 직접 수정"""
+    target_ratio = st.session_state.orient_select
+    if target_ratio == "가로형":
+        st.session_state.width_input = 1920
+        st.session_state.height_input = 1080
+    elif target_ratio == "세로형":
+        st.session_state.width_input = 1080
+        st.session_state.height_input = 1920
+    elif target_ratio == "정사각형":
+        st.session_state.width_input = 1080
+        st.session_state.height_input = 1080
 
 st.title("📸 이미지 수집기 Pro")
 st.write("PC와 스마트폰 어디서든 고화질 이미지를 수집하세요.")
@@ -52,21 +52,21 @@ with st.container():
     with col1:
         query = st.text_input("🔍 어떤 이미지를 찾으시나요?", placeholder="예: 바다, 산, 고양이")
     with col2:
-        # on_change를 사용하여 비율 변경 시 해상도 값 업데이트 함수 호출
-        orient_display = st.selectbox(
+        # on_change를 통해 즉각 업데이트
+        st.selectbox(
             "📐 이미지 비율", 
             ["가로형", "세로형", "정사각형"], 
             key="orient_select",
-            on_change=update_resolution
+            on_change=on_ratio_change
         )
         orient_map = {"가로형": "landscape", "세로형": "portrait", "정사각형": "square"}
-        orientation = orient_map[orient_display]
+        orientation = orient_map[st.session_state.orient_select]
 
     with st.expander("⚙️ 고급 필터 (해상도 설정)", expanded=True):
         c1, c2, c3 = st.columns(3)
-        # 세션 상태의 값을 직접 사용하여 동기화
-        min_w = c1.number_input("최소 가로 (px)", value=st.session_state.width_val, key="width_input")
-        min_h = c2.number_input("최소 세로 (px)", value=st.session_state.height_val, key="height_input")
+        # 중요: value를 쓰지 않고 key만 사용하여 세션 상태와 직접 결합합니다.
+        min_w = c1.number_input("최소 가로 (px)", key="width_input")
+        min_h = c2.number_input("최소 세로 (px)", key="height_input")
         count = c3.slider("사이트당 검색 개수", 10, 80, 20)
 
 # 검색 실행
@@ -76,6 +76,7 @@ if st.button("사진 검색 및 분석 시작"):
     else:
         results = []
         with st.spinner(f"'{query}' 이미지 검색 중..."):
+            # Pexels 검색
             try:
                 p_url = f"https://api.pexels.com/v1/search?query={query}&per_page={count}&orientation={orientation}"
                 p_res = requests.get(p_url, headers={"Authorization": PEXELS_API_KEY}, timeout=5).json()
@@ -84,6 +85,7 @@ if st.button("사진 검색 및 분석 시작"):
                         results.append({'url': img['src']['large'], 'orig': img['src']['original'], 'source': 'Pexels'})
             except: pass
 
+            # Pixabay 검색
             try:
                 px_url = f"https://pixabay.com/api/?key={PIXABAY_API_KEY}&q={query}&image_type=photo&orientation={orientation}&safesearch=true&per_page={count}"
                 px_res = requests.get(px_url, timeout=5).json()
