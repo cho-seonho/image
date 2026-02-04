@@ -7,21 +7,31 @@ from datetime import datetime, timedelta, timezone
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 상단 음영 및 모바일 대응 ---
+# --- CSS: 모바일 스크롤 버그 수정 및 레이아웃 최적화 ---
 st.markdown("""
     <style>
-    /* 상단 고정 레이아웃 (모바일 터치 간섭 최소화) */
+    /* 1. 상단 고정 레이아웃 수정: 모바일에서 스크롤이 막히는 현상 방지 */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
         top: 0;
         background-color: white;
-        z-index: 1000;
+        z-index: 999;
         padding: 10px 0px 15px 0px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
         border-bottom: 1px solid #e1e4e8;
+        /* 아래 한 줄이 핵심: 고정 영역이 너무 커서 클릭/스크롤을 막지 않도록 설정 */
+        max-height: fit-content; 
     }
 
-    /* 일체형 둥근 카드 박스 */
+    /* 다크모드 대응 (모바일 사용자 배려) */
+    @media (prefers-color-scheme: dark) {
+        div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
+            background-color: #0e1117;
+            border-bottom: 1px solid #31333f;
+        }
+    }
+
+    /* 2. 일체형 둥근 카드 박스 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
@@ -30,13 +40,13 @@ st.markdown("""
         background-color: #ffffff;
     }
 
-    /* 선택 시 이미지 블러 효과 */
+    /* 3. 선택 시 이미지 블러 효과 */
     .selected-img img {
         filter: blur(5px) grayscale(40%);
         transition: filter 0.3s ease;
     }
 
-    /* 버튼 및 체크박스 높이 칼정렬 */
+    /* 4. 버튼 및 체크박스 높이 칼정렬 (45px) */
     .stButton > button, div[data-testid="stCheckbox"] {
         height: 45px !important;
         border-radius: 12px !important;
@@ -84,7 +94,7 @@ def show_full_image(img_url, source):
     st.write(f"출처: **{source}**")
     st.image(img_url, use_container_width=True)
 
-# --- 상단 UI (Container) ---
+# --- 상단 UI (고정 영역) ---
 with st.container():
     st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
     st.title("📸 이미지 수집기 Pro")
@@ -99,7 +109,6 @@ with st.container():
         min_h = f2.number_input("세로(px)", key="height_input", min_value=0)
         count = f3.slider("개수", 10, 80, 20)
 
-    # 모바일 멈춤 현상 방지를 위해 검색 로직 최적화
     if st.button("📸 사진 검색 시작", use_container_width=True):
         if query:
             results = []
@@ -119,7 +128,6 @@ with st.container():
                         results.append({'url': img['webformatURL'], 'orig': img['largeImageURL'], 'source': 'Pixabay'})
             except: pass
             st.session_state['results'] = results
-            # 모바일 환경에서 st.rerun()은 가끔 먹통을 만듦 -> 필요한 경우에만 최소화
 
     if st.session_state['results']:
         inf1, inf2, inf3 = st.columns([1, 1, 1.5])
@@ -128,10 +136,9 @@ with st.container():
         dl_btn = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 결과 출력 ---
+# --- 결과 출력 (스크롤 가능 영역) ---
 if st.session_state['results']:
     selected_images = []
-    # 모바일에서는 1열 또는 2열이 좋으나 PC 호환성을 위해 3열 유지하되, 모바일은 자동 줄바꿈 됨
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
