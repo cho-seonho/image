@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 웹 상단 고정 및 파란색 선택 버튼 UI 유지 ---
+# --- CSS: 기존 UI 유지 및 전체 선택 버튼 스타일 ---
 st.markdown("""
     <style>
     /* 1. 상단 UI (PC 고정) */
@@ -21,14 +21,12 @@ st.markdown("""
         border-bottom: 1px solid #e1e4e8;
     }
 
-    /* 모바일 대응: 스크롤을 위해 sticky 해제 */
     @media (max-width: 768px) {
         div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
             position: relative !important;
             box-shadow: none !important;
             padding: 10px 5px;
         }
-        /* 모바일에서만 버튼 가로 정렬 */
         div[data-testid="column"] {
             width: 48% !important;
             flex: 1 1 48% !important;
@@ -49,7 +47,7 @@ st.markdown("""
         transition: filter 0.3s ease;
     }
 
-    /* 3. [UI 고정] 버튼 및 선택 체크박스 스타일 */
+    /* 3. 버튼 및 선택 체크박스 UI (절대 보존) */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
@@ -64,7 +62,6 @@ st.markdown("""
         align-items: center;
         justify-content: center;
     }
-    /* 파란색 선택 상태 고정 */
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
         background-color: #2196F3 !important;
         border-color: #2196F3 !important;
@@ -87,6 +84,7 @@ st.markdown("""
 
 # --- 세션 초기화 ---
 if 'results' not in st.session_state: st.session_state['results'] = []
+if 'all_selected' not in st.session_state: st.session_state['all_selected'] = False
 
 def on_ratio_change():
     ratio = st.session_state.orient_select
@@ -97,12 +95,18 @@ def on_ratio_change():
     else:
         st.session_state.width_input, st.session_state.height_input = 1080, 1080
 
+# 전체 선택/해제 토글 함수
+def toggle_all():
+    st.session_state.all_selected = not st.session_state.all_selected
+    for idx in range(len(st.session_state['results'])):
+        st.session_state[f"chk_{idx}"] = st.session_state.all_selected
+
 @st.dialog("🔍 이미지 크게 보기", width="large")
 def show_full_image(img_url, source):
     st.write(f"출처: **{source}**")
     st.image(img_url, use_container_width=True)
 
-# --- 상단 UI (웹 버전 다운로드 버튼 포함) ---
+# --- 상단 UI ---
 with st.container():
     st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
     st.title("📸 이미지 수집기 Pro")
@@ -117,7 +121,6 @@ with st.container():
         min_h = f2.number_input("세로(px)", key="height_input", min_value=0, value=1080)
         count = f3.slider("개수", 10, 80, 20)
 
-    # 검색 버튼
     if st.button("📸 사진 검색 시작", use_container_width=True):
         if query:
             results = []
@@ -135,14 +138,21 @@ with st.container():
                         results.append({'url': img['webformatURL'], 'orig': img['largeImageURL'], 'source': 'Pixabay'})
             except: pass
             st.session_state['results'] = results
+            st.session_state.all_selected = False # 검색 시 초기화
 
-    # [중요] 상단 UI 영역 내부의 다운로드 버튼 표시줄
+    # 상단 정보 및 버튼 영역
     if st.session_state['results']:
-        # 현재 선택된 이미지 리스트 미리 계산
+        # 현재 선택된 이미지 리스트
         temp_selected = [img for idx, img in enumerate(st.session_state['results']) if st.session_state.get(f"chk_{idx}", False)]
         
-        inf_col1, inf_col2 = st.columns([1, 1.5])
+        # 3개 컬럼으로 분할 (결과 개수 | 전체선택 버튼 | 다운로드 버튼)
+        inf_col1, inf_col2, inf_col3 = st.columns([1, 1, 1.5])
+        
         inf_col1.markdown(f"📊 검색: **{len(st.session_state['results'])}**장")
+        
+        # 전체 선택 버튼 (검색 개수 바로 오른쪽)
+        select_text = "✅ 전체 해제" if st.session_state.all_selected else "☑️ 전체 선택"
+        inf_col2.button(select_text, on_click=toggle_all, use_container_width=True)
         
         if temp_selected:
             zip_buffer = BytesIO()
@@ -155,8 +165,7 @@ with st.container():
                         zf.writestr(f"{query.replace(' ','_')}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg", res.content)
                     except: continue
             
-            # 상단 UI에 다운로드 버튼 고정
-            inf_col2.download_button(
+            inf_col3.download_button(
                 label=f"📥 {len(temp_selected)}장 다운로드",
                 data=zip_buffer.getvalue(),
                 file_name=f"{query}_{now_str}.zip",
@@ -183,6 +192,5 @@ if st.session_state['results']:
                 if st.button("🔍 보기", key=f"btn_{idx}"):
                     show_full_image(img['orig'], img['source'])
             with b_col2:
-                # 선택 시 상단 다운로드 버튼이 즉시 갱신되도록 체크박스 배치
                 st.checkbox("선택", key=f"chk_{idx}")
             st.markdown('</div>', unsafe_allow_html=True)
