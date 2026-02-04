@@ -17,13 +17,31 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 스트림릿 Secrets에서 API 키 불러오기
-# (사이드바 입력란을 없애고 서버에서 직접 가져옵니다)
 try:
     PEXELS_API_KEY = st.secrets["PEXELS_API_KEY"]
     PIXABAY_API_KEY = st.secrets["PIXABAY_API_KEY"]
 except:
     st.error("⚠️ API 키가 설정되지 않았습니다. Streamlit Cloud의 Secrets 설정을 확인해주세요.")
     st.stop()
+
+# --- 비율 변경 시 해상도를 자동으로 업데이트하는 함수 ---
+def update_resolution():
+    orient = st.session_state.orient_select
+    if orient == "가로형":
+        st.session_state.width_val = 1920
+        st.session_state.height_val = 1080
+    elif orient == "세로형":
+        st.session_state.width_val = 1080
+        st.session_state.height_val = 1920
+    elif orient == "정사각형":
+        st.session_state.width_val = 1080
+        st.session_state.height_val = 1080
+
+# 초기 세션 상태 설정
+if 'width_val' not in st.session_state:
+    st.session_state.width_val = 1920
+if 'height_val' not in st.session_state:
+    st.session_state.height_val = 1080
 
 st.title("📸 이미지 수집기 Pro")
 st.write("PC와 스마트폰 어디서든 고화질 이미지를 수집하세요.")
@@ -34,16 +52,21 @@ with st.container():
     with col1:
         query = st.text_input("🔍 어떤 이미지를 찾으시나요?", placeholder="예: 바다, 산, 고양이")
     with col2:
-        # 비율 메뉴 한글화
-        orient_display = st.selectbox("📐 이미지 비율", ["가로형", "세로형", "정사각형"])
-        # API 전송을 위해 영어 키값으로 변환
+        # on_change를 사용하여 비율 변경 시 해상도 값 업데이트 함수 호출
+        orient_display = st.selectbox(
+            "📐 이미지 비율", 
+            ["가로형", "세로형", "정사각형"], 
+            key="orient_select",
+            on_change=update_resolution
+        )
         orient_map = {"가로형": "landscape", "세로형": "portrait", "정사각형": "square"}
         orientation = orient_map[orient_display]
 
-    with st.expander("⚙️ 고급 필터 (해상도 설정)"):
+    with st.expander("⚙️ 고급 필터 (해상도 설정)", expanded=True):
         c1, c2, c3 = st.columns(3)
-        min_w = c1.number_input("최소 가로 (px)", value=1920)
-        min_h = c2.number_input("최소 세로 (px)", value=1080)
+        # 세션 상태의 값을 직접 사용하여 동기화
+        min_w = c1.number_input("최소 가로 (px)", value=st.session_state.width_val, key="width_input")
+        min_h = c2.number_input("최소 세로 (px)", value=st.session_state.height_val, key="height_input")
         count = c3.slider("사이트당 검색 개수", 10, 80, 20)
 
 # 검색 실행
@@ -53,7 +76,6 @@ if st.button("사진 검색 및 분석 시작"):
     else:
         results = []
         with st.spinner(f"'{query}' 이미지 검색 중..."):
-            # Pexels API
             try:
                 p_url = f"https://api.pexels.com/v1/search?query={query}&per_page={count}&orientation={orientation}"
                 p_res = requests.get(p_url, headers={"Authorization": PEXELS_API_KEY}, timeout=5).json()
@@ -62,7 +84,6 @@ if st.button("사진 검색 및 분석 시작"):
                         results.append({'url': img['src']['large'], 'orig': img['src']['original'], 'source': 'Pexels'})
             except: pass
 
-            # Pixabay API
             try:
                 px_url = f"https://pixabay.com/api/?key={PIXABAY_API_KEY}&q={query}&image_type=photo&orientation={orientation}&safesearch=true&per_page={count}"
                 px_res = requests.get(px_url, timeout=5).json()
