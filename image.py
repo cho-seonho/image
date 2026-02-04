@@ -8,7 +8,7 @@ import time
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 기존 UI 유지 ---
+# --- CSS: 기존 UI 보존 및 모바일 전용 수정 ---
 st.markdown("""
     <style>
     /* 1. 상단 UI (PC 고정) */
@@ -22,20 +22,27 @@ st.markdown("""
         border-bottom: 1px solid #e1e4e8;
     }
 
+    /* 2. [모바일 전용 CSS] */
     @media (max-width: 768px) {
         div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
             position: relative !important;
             box-shadow: none !important;
             padding: 10px 5px;
         }
-        div[data-testid="column"] {
-            width: 48% !important;
-            flex: 1 1 48% !important;
-            min-width: 48% !important;
+        
+        /* 모바일에서 '보기' 버튼 컬럼 숨기기 */
+        div.mobile-view-hide {
+            display: none !important;
+        }
+        
+        /* 모바일에서 '선택' 버튼(체크박스)을 한 줄에 꽉 차게 */
+        div.mobile-view-full {
+            width: 100% !important;
+            min-width: 100% !important;
         }
     }
 
-    /* 2. 이미지 카드 및 선택 효과 */
+    /* 3. 이미지 카드 및 선택 효과 (기존 유지) */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
@@ -48,7 +55,7 @@ st.markdown("""
         transition: filter 0.3s ease;
     }
 
-    /* 3. 버튼 및 선택 체크박스 UI (절대 보존) */
+    /* 4. 버튼 및 선택 체크박스 UI (절대 보존) */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
@@ -61,7 +68,7 @@ st.markdown("""
         padding: 0 10px !important;
         display: flex;
         align-items: center;
-        justify(content): center;
+        justify-content: center;
         margin-top: 0px !important;
     }
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
@@ -97,14 +104,12 @@ def on_ratio_change():
     else:
         st.session_state.width_input, st.session_state.height_input = 1080, 1080
 
-# 전체 선택/해제 토글 함수 (메시지 기능 추가)
 def toggle_all():
     msg_text = "전체 해제 중..." if st.session_state.all_selected else "전체 선택 중..."
     with st.spinner(msg_text):
         st.session_state.all_selected = not st.session_state.all_selected
         for idx in range(len(st.session_state['results'])):
             st.session_state[f"chk_{idx}"] = st.session_state.all_selected
-        # 처리가 너무 빨라 메시지가 안 보일 경우를 대비해 아주 짧은 지연 추가 (선택 사항)
         time.sleep(0.3)
 
 @st.dialog("🔍 이미지 크게 보기", width="large")
@@ -121,7 +126,7 @@ with st.container():
     query = col_search.text_input("검색어", placeholder="검색어를 입력하세요", label_visibility="collapsed")
     ratio_display = col_ratio.selectbox("비율", ["가로형", "세로형", "정사각형"], key="orient_select", on_change=on_ratio_change, label_visibility="collapsed")
     
-    with st.expander("⚙️ 고급 필터 (해상도/개수)", expanded=True):
+    with st.expander("⚙️ 고급 필터", expanded=True):
         f1, f2, f3 = st.columns(3)
         min_w = f1.number_input("가로(px)", key="width_input", min_value=0, value=1920)
         min_h = f2.number_input("세로(px)", key="height_input", min_value=0, value=1080)
@@ -166,6 +171,7 @@ with st.container():
                         zf.writestr(f"{query.replace(' ','_')}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg", res.content)
                     except: continue
             
+            # 상단 다운로드 버튼 (1번째)
             inf_col3.download_button(
                 label=f"📥 {len(temp_selected)}장 다운로드",
                 data=zip_buffer.getvalue(),
@@ -189,9 +195,39 @@ if st.session_state['results']:
             st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
             
             b_col1, b_col2 = st.columns(2)
+            # 웹에서는 '보기' 보임, 모바일에서는 CSS로 숨김
             with b_col1:
+                st.markdown('<div class="mobile-view-hide">', unsafe_allow_html=True)
                 if st.button("🔍 보기", key=f"btn_{idx}"):
                     show_full_image(img['orig'], img['source'])
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # 모바일에서는 '선택' 버튼이 한 줄을 다 차지하도록 설정
             with b_col2:
+                st.markdown('<div class="mobile-view-full">', unsafe_allow_html=True)
                 st.checkbox("선택", key=f"chk_{idx}")
+                st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
+
+    # 하단 다운로드 버튼 (2번째)
+    temp_selected_bottom = [img for idx, img in enumerate(st.session_state['results']) if st.session_state.get(f"chk_{idx}", False)]
+    if temp_selected_bottom:
+        st.markdown("---")
+        # 버튼 생성을 위해 zip 파일 다시 준비 (기존 buffer 재사용 가능하나 안전을 위해)
+        zip_buffer_btm = BytesIO()
+        KST = timezone(timedelta(hours=9))
+        now_str = datetime.now(KST).strftime("%Y%m%d_%H%M")
+        with zipfile.ZipFile(zip_buffer_btm, "w") as zf:
+            for i, si in enumerate(temp_selected_bottom):
+                try:
+                    res = requests.get(si['orig'], timeout=10)
+                    zf.writestr(f"{query.replace(' ','_')}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg", res.content)
+                except: continue
+        
+        st.download_button(
+            label=f"📥 선택한 {len(temp_selected_bottom)}장 최종 다운로드",
+            data=zip_buffer_btm.getvalue(),
+            file_name=f"{query}_{now_str}_final.zip",
+            use_container_width=True,
+            key="bottom_dl_btn"
+        )
