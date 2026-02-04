@@ -6,7 +6,7 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# CSS: 디자인 최적화
+# CSS: 디자인 최적화 및 카드 스타일 적용
 st.markdown("""
     <style>
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
@@ -17,20 +17,43 @@ st.markdown("""
         padding-top: 10px;
         border-bottom: 2px solid #f0f2f6;
     }
+    
+    /* 이미지 카드 스타일: 한 덩어리로 보이게 그림자 및 테두리 추가 */
+    .image-card {
+        background-color: #ffffff;
+        border-radius: 15px;
+        padding: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: 1px solid #f0f2f6;
+    }
+    
+    .image-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+    }
+
     /* 출처 태그 스타일 */
     .source-tag {
-        font-size: 0.8rem;
-        padding: 2px 8px;
-        border-radius: 5px;
-        background-color: #f0f2f6;
-        color: #555;
-        font-weight: bold;
-        margin-bottom: 5px;
+        font-size: 0.75rem;
+        padding: 2px 10px;
+        border-radius: 20px;
+        background-color: #e9ecef;
+        color: #495057;
+        font-weight: 700;
+        margin-bottom: 10px;
         display: inline-block;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
-    .stImage img { transition: 0.3s; cursor: pointer; border-radius: 10px; }
+    
+    .stImage img { border-radius: 10px; cursor: zoom-in; }
     .stButton>button { width: 100%; border-radius: 10px; font-weight: bold; }
     .stDownloadButton>button { width: 100%; background-color: #2196F3; color: white; border-radius: 10px; }
+    
+    /* 체크박스 영역 정렬 */
+    .stCheckbox { margin-top: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -84,13 +107,12 @@ with st.container():
             results = []
             orient_map = {"가로형": "landscape", "세로형": "portrait", "정사각형": "square"}
             try:
-                # Pexels 검색
                 p_res = requests.get(f"https://api.pexels.com/v1/search?query={query}&per_page={count}&orientation={orient_map[ratio_display]}", 
                                      headers={"Authorization": PEXELS_API_KEY}).json()
                 for img in p_res.get('photos', []):
                     if img['width'] >= min_w and img['height'] >= min_h:
                         results.append({'url': img['src']['large'], 'orig': img['src']['original'], 'source': 'Pexels'})
-                # Pixabay 검색
+                
                 px_res = requests.get(f"https://pixabay.com/api/?key={PIXABAY_API_KEY}&q={query}&image_type=photo&orientation={orient_map[ratio_display]}&per_page={count}").json()
                 for img in px_res.get('hits', []):
                     if img['imageWidth'] >= min_w and img['imageHeight'] >= min_h:
@@ -106,23 +128,35 @@ with st.container():
         download_placeholder = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 이미지 결과 영역 ---
+# --- 이미지 결과 영역 (카드 스타일 적용) ---
 if st.session_state['results']:
     selected_images = []
+    # 한 줄에 3개씩 배치
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
         with cols[idx % 3]:
-            # 화면상에 출처 표시
-            st.markdown(f'<span class="source-tag">{img["source"]}</span>', unsafe_allow_html=True)
+            # 커스텀 HTML 컨테이너 시작
+            st.markdown(f'''
+                <div class="image-card">
+                    <span class="source-tag">{img["source"]}</span>
+            ''', unsafe_allow_html=True)
+            
             st.image(img['url'], use_container_width=True)
             
+            # 카드 내부 버튼 배치
             c1, c2 = st.columns([1, 1])
-            if c1.button("🔍 크게보기", key=f"exp_{idx}"):
-                show_full_image(img['orig'], img['source'])
-            if c2.checkbox(f"선택하기", key=f"chk_{idx}"):
-                selected_images.append(img)
+            with c1:
+                if st.button("🔍 크게보기", key=f"exp_{idx}"):
+                    show_full_image(img['orig'], img['source'])
+            with c2:
+                if st.checkbox(f"선택하기", key=f"chk_{idx}"):
+                    selected_images.append(img)
+            
+            # 컨테이너 닫기
+            st.markdown('</div>', unsafe_allow_html=True)
     
+    # 다운로드 로직 유지
     if selected_images:
         select_placeholder.write(f"📍 **{len(selected_images)}**장 선택됨")
         with download_placeholder:
@@ -131,10 +165,7 @@ if st.session_state['results']:
                 for i, si in enumerate(selected_images):
                     try:
                         res = requests.get(si['orig'], timeout=10)
-                        # 파일명에 출처(Source)를 포함시켜 저장
-                        # 예: 01_Pexels.jpg, 02_Pixabay.jpg
-                        extension = "jpg" 
-                        file_name = f"{i+1:02d}_{si['source']}.{extension}"
+                        file_name = f"{i+1:02d}_{si['source']}.jpg"
                         zf.writestr(file_name, res.content)
                     except: continue
             st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_출처포함.zip")
