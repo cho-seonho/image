@@ -8,7 +8,7 @@ import time
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 기존 UI 유지 및 모바일 최적화 ---
+# --- CSS: 웹 정렬 1:1 고정 및 모바일 '보기' 버튼 강제 삭제 ---
 st.markdown("""
     <style>
     /* 1. 상단 UI (PC 고정) */
@@ -22,19 +22,34 @@ st.markdown("""
         border-bottom: 1px solid #e1e4e8;
     }
 
+    /* 2. 웹 버전 버튼 1:1 정렬 (틀어짐 방지) */
+    [data-testid="column"] {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* 3. [핵심] 모바일 전용 설정 */
     @media (max-width: 768px) {
+        /* 상단 고정 해제 */
         div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
             position: relative !important;
             box-shadow: none !important;
-            padding: 10px 5px;
         }
-        /* 모바일에서는 컬럼이 한 줄씩 나오게 설정 */
-        [data-testid="column"] {
+        
+        /* 모바일에서 '보기' 버튼이 포함된 첫 번째 미니 컬럼을 아예 삭제 */
+        div[data-testid="column"]:nth-of-type(1):has(button[key^="btn_"]) {
+            display: none !important;
+        }
+        
+        /* 모바일에서 '선택' 버튼이 포함된 두 번째 미니 컬럼을 100%로 확장 */
+        div[data-testid="column"]:nth-of-type(2):has(div[data-testid="stCheckbox"]) {
             width: 100% !important;
+            flex: 1 1 100% !important;
         }
     }
 
-    /* 2. 카드 스타일 및 선택 효과 */
+    /* 4. 이미지 카드 스타일 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
@@ -47,7 +62,7 @@ st.markdown("""
         transition: filter 0.3s ease;
     }
 
-    /* 3. 버튼 UI 고정 (파란색 체크박스) */
+    /* 5. 버튼 및 파란색 선택 UI (절대 보존) */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
@@ -119,7 +134,6 @@ with st.container():
     query = col_search.text_input("검색어", placeholder="검색어를 입력하세요", label_visibility="collapsed")
     ratio_display = col_ratio.selectbox("비율", ["가로형", "세로형", "정사각형"], key="orient_select", on_change=on_ratio_change, label_visibility="collapsed")
     
-    # 모바일에서 무의식중에 누르지 않도록 닫아둠
     with st.expander("⚙️ 고급 필터", expanded=False):
         f1, f2, f3 = st.columns(3)
         min_w = f1.number_input("가로(px)", key="width_input", min_value=0, value=1920)
@@ -165,7 +179,6 @@ with st.container():
                         zf.writestr(f"{query.replace(' ','_')}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg", res.content)
                     except: continue
             
-            # [1번째 다운로드 버튼] 상단 고정 UI 내부
             inf_col3.download_button(
                 label=f"📥 {len(temp_selected)}장 다운로드",
                 data=zip_buffer.getvalue(),
@@ -177,7 +190,6 @@ with st.container():
 
 # --- 결과 출력 ---
 if st.session_state['results']:
-    # 3열 레이아웃 유지
     cols = st.columns(3)
     for idx, img in enumerate(st.session_state['results']):
         is_this_selected = st.session_state.get(f"chk_{idx}", False)
@@ -189,26 +201,17 @@ if st.session_state['results']:
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
             
-            # --- [수정 핵심] 웹/모바일 레이아웃 조건부 렌더링 ---
-            # 버튼 영역을 하나의 container로 묶어 처리
-            with st.container():
-                # CSS로 모바일/웹을 구분하여 버튼을 노출/비노출 시킴
-                # 웹: '보기'와 '선택'이 1:1로 나란히 / 모바일: '보기'는 숨기고 '선택'만 100%
-                b_col1, b_col2 = st.columns([1, 1])
-                
-                with b_col1:
-                    # '보기' 버튼은 웹(데스크탑)에서만 보이도록 클래스 부여
-                    st.markdown('<div class="mobile-view-hide">', unsafe_allow_html=True)
-                    if st.button("🔍 보기", key=f"btn_{idx}"):
-                        show_full_image(img['orig'], img['source'])
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                with b_col2:
-                    # 이 체크박스는 모바일에서 부모 컬럼이 100%가 되면서 전체 너비를 가짐
-                    st.checkbox("선택", key=f"chk_{idx}")
+            # [수정된 버튼 영역]
+            # 웹에서는 정확히 1:1 비율 / 모바일에서는 CSS가 첫 번째 컬럼을 날려버림
+            b_col1, b_col2 = st.columns([1, 1])
+            with b_col1:
+                if st.button("🔍 보기", key=f"btn_{idx}"):
+                    show_full_image(img['orig'], img['source'])
+            with b_col2:
+                st.checkbox("선택", key=f"chk_{idx}")
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # [2번째 다운로드 버튼] 리스트 맨 하단
+    # 하단 다운로드 버튼 (2번째)
     temp_selected_bottom = [img for idx, img in enumerate(st.session_state['results']) if st.session_state.get(f"chk_{idx}", False)]
     if temp_selected_bottom:
         st.markdown("---")
