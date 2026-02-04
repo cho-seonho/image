@@ -2,26 +2,26 @@ import streamlit as st
 import requests
 import zipfile
 from io import BytesIO
-from datetime import datetime, timedelta, timezone  # 시간대 설정을 위한 추가
+from datetime import datetime, timedelta, timezone
 
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 상단 음영 및 버튼/이미지 스타일 (유지) ---
+# --- CSS: 상단 음영 및 모바일 대응 ---
 st.markdown("""
     <style>
+    /* 상단 고정 레이아웃 (모바일 터치 간섭 최소화) */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
-        top: 2.8rem;
+        top: 0;
         background-color: white;
-        z-index: 999;
-        padding-top: 10px;
-        padding-bottom: 15px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
+        z-index: 1000;
+        padding: 10px 0px 15px 0px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
         border-bottom: 1px solid #e1e4e8;
-        margin-bottom: 20px;
     }
 
+    /* 일체형 둥근 카드 박스 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
@@ -30,28 +30,25 @@ st.markdown("""
         background-color: #ffffff;
     }
 
+    /* 선택 시 이미지 블러 효과 */
     .selected-img img {
         filter: blur(5px) grayscale(40%);
         transition: filter 0.3s ease;
     }
 
-    .stButton > button {
+    /* 버튼 및 체크박스 높이 칼정렬 */
+    .stButton > button, div[data-testid="stCheckbox"] {
         height: 45px !important;
         border-radius: 12px !important;
         font-weight: bold !important;
-        width: 100% !important;
+        margin-top: 0px !important;
     }
 
     div[data-testid="stCheckbox"] {
-        height: 45px !important;
-        border-radius: 12px;
         border: 1px solid #dcdfe6;
-        padding: 0 10px !important;
-        width: 100% !important;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-top: 0px !important;
     }
     
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
@@ -72,7 +69,6 @@ st.markdown("""
 if 'width_input' not in st.session_state: st.session_state['width_input'] = 1920
 if 'height_input' not in st.session_state: st.session_state['height_input'] = 1080
 if 'results' not in st.session_state: st.session_state['results'] = []
-if 'search_clicked' not in st.session_state: st.session_state['search_clicked'] = False
 
 def on_ratio_change():
     ratio = st.session_state.orient_select
@@ -88,7 +84,7 @@ def show_full_image(img_url, source):
     st.write(f"출처: **{source}**")
     st.image(img_url, use_container_width=True)
 
-# --- 상단 UI ---
+# --- 상단 UI (Container) ---
 with st.container():
     st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
     st.title("📸 이미지 수집기 Pro")
@@ -103,9 +99,9 @@ with st.container():
         min_h = f2.number_input("세로(px)", key="height_input", min_value=0)
         count = f3.slider("개수", 10, 80, 20)
 
+    # 모바일 멈춤 현상 방지를 위해 검색 로직 최적화
     if st.button("📸 사진 검색 시작", use_container_width=True):
         if query:
-            st.session_state.search_clicked = True
             results = []
             try:
                 p_key = st.secrets["PEXELS_API_KEY"]
@@ -123,11 +119,11 @@ with st.container():
                         results.append({'url': img['webformatURL'], 'orig': img['largeImageURL'], 'source': 'Pixabay'})
             except: pass
             st.session_state['results'] = results
-            st.rerun()
+            # 모바일 환경에서 st.rerun()은 가끔 먹통을 만듦 -> 필요한 경우에만 최소화
 
-    if st.session_state.search_clicked:
+    if st.session_state['results']:
         inf1, inf2, inf3 = st.columns([1, 1, 1.5])
-        inf1.write(f"📊 결과: **{len(st.session_state['results'])}**장")
+        inf1.write(f"📊 결과: **{len(st.session_state['results'])}**")
         sel_info = inf2.empty()
         dl_btn = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -135,6 +131,7 @@ with st.container():
 # --- 결과 출력 ---
 if st.session_state['results']:
     selected_images = []
+    # 모바일에서는 1열 또는 2열이 좋으나 PC 호환성을 위해 3열 유지하되, 모바일은 자동 줄바꿈 됨
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
@@ -153,16 +150,14 @@ if st.session_state['results']:
                 if st.button("🔍 보기", key=f"btn_{idx}"):
                     show_full_image(img['orig'], img['source'])
             with b_col2:
-                if st.checkbox("선택하기", key=f"chk_{idx}"):
+                if st.checkbox("선택", key=f"chk_{idx}"):
                     selected_images.append(img)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # [핵심 수정] 대한민국 시간(KST) 기준 파일명 생성
     if selected_images:
-        sel_info.write(f"📍 **{len(selected_images)}**장 선택됨")
+        sel_info.write(f"📍 **{len(selected_images)}**장")
         with dl_btn:
             zip_buffer = BytesIO()
-            # UTC+9 (대한민국 표준시) 설정
             KST = timezone(timedelta(hours=9))
             now_str = datetime.now(KST).strftime("%Y%m%d_%H%M")
             
@@ -174,4 +169,4 @@ if st.session_state['results']:
                         file_name = f"{clean_query}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg"
                         zf.writestr(file_name, res.content)
                     except: continue
-            st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_{now_str}.zip")
+            st.download_button(f"📥 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_{now_str}.zip", use_container_width=True)
