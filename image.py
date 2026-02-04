@@ -7,29 +7,45 @@ from datetime import datetime, timedelta, timezone
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 선택 버튼 UI 복구 및 레이아웃 유지 ---
+# --- CSS: 모바일 버튼 가로 정렬 및 하단 다운로드 바 고정 ---
 st.markdown("""
     <style>
-    /* 1. 상단 UI 음영 및 고정 설정 (PC 기준) */
+    /* 1. 상단 UI (PC 고정, 모바일 해제) */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
         top: 0;
         background-color: white;
         z-index: 999;
-        padding: 10px 15px 15px 15px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
+        padding: 10px 15px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
         border-bottom: 1px solid #e1e4e8;
     }
 
-    /* 2. 모바일 대응: 스크롤 방해 금지 */
     @media (max-width: 768px) {
         div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
             position: relative !important;
             box-shadow: none !important;
+            padding: 10px 5px;
         }
     }
 
-    /* 3. 일체형 둥근 카드 박스 */
+    /* 2. 하단 다운로드 바 고정 (핵심 수정사항) */
+    .download-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: rgba(255, 255, 255, 0.95);
+        padding: 15px;
+        box-shadow: 0 -4px 15px rgba(0,0,0,0.1);
+        z-index: 1000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+    }
+
+    /* 3. 이미지 카드 및 버튼 스타일 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
@@ -38,57 +54,46 @@ st.markdown("""
         background-color: #ffffff;
     }
 
-    /* 4. 선택 시 이미지 블러 효과 */
-    .selected-img img {
-        filter: blur(5px) grayscale(40%);
-        transition: filter 0.3s ease;
+    /* 모바일에서 버튼 두 개가 한 줄에 나오도록 강제 설정 */
+    [data-testid="column"] {
+        width: 48% !important;
+        flex: 1 1 48% !important;
+        min-width: 48% !important;
     }
 
-    /* 5. [복구] 버튼 및 선택 체크박스 UI 스타일 */
-    .stButton > button {
+    .stButton > button, div[data-testid="stCheckbox"] {
         height: 45px !important;
         border-radius: 12px !important;
         font-weight: bold !important;
         width: 100% !important;
     }
 
-    /* 선택 버튼(체크박스) 디자인 복구 */
     div[data-testid="stCheckbox"] {
-        height: 45px !important;
-        border-radius: 12px !important;
         border: 1px solid #dcdfe6;
-        padding: 0 10px !important;
-        width: 100% !important;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-top: 0px !important;
     }
     
-    /* 선택 시 파란색 배경 복구 */
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
         background-color: #2196F3 !important;
         border-color: #2196F3 !important;
     }
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) label p {
         color: white !important;
-        font-weight: bold;
     }
-
-    .source-label { font-size: 0.85rem; color: #666; margin: 10px 0; font-weight: bold; }
-    .stImage img { border-radius: 12px; }
 
     /* 다크모드 대응 */
     @media (prefers-color-scheme: dark) {
-        div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) { background-color: #0e1117; }
+        div[data-testid="stVerticalBlock"] > div:has(div.fixed-header), .download-bar { 
+            background-color: #0e1117; 
+        }
         .image-card-container { background-color: #262730; border-color: #31333f; }
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 세션 초기화 ---
-if 'width_input' not in st.session_state: st.session_state['width_input'] = 1920
-if 'height_input' not in st.session_state: st.session_state['height_input'] = 1080
 if 'results' not in st.session_state: st.session_state['results'] = []
 
 def on_ratio_change():
@@ -105,7 +110,7 @@ def show_full_image(img_url, source):
     st.write(f"출처: **{source}**")
     st.image(img_url, use_container_width=True)
 
-# --- 상단 UI (헤더) ---
+# --- 상단 UI ---
 with st.container():
     st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
     st.title("📸 이미지 수집기 Pro")
@@ -116,8 +121,8 @@ with st.container():
     
     with st.expander("⚙️ 고급 필터 (해상도/개수)", expanded=True):
         f1, f2, f3 = st.columns(3)
-        min_w = f1.number_input("가로(px)", key="width_input", min_value=0)
-        min_h = f2.number_input("세로(px)", key="height_input", min_value=0)
+        min_w = f1.number_input("가로(px)", key="width_input", min_value=0, value=1920)
+        min_h = f2.number_input("세로(px)", key="height_input", min_value=0, value=1080)
         count = f3.slider("개수", 10, 80, 20)
 
     if st.button("📸 사진 검색 시작", use_container_width=True):
@@ -139,21 +144,15 @@ with st.container():
                         results.append({'url': img['webformatURL'], 'orig': img['largeImageURL'], 'source': 'Pixabay'})
             except: pass
             st.session_state['results'] = results
-
-    if st.session_state['results']:
-        inf1, inf2, inf3 = st.columns([1, 1, 1.5])
-        inf1.write(f"📊 결과: **{len(st.session_state['results'])}**")
-        sel_info = inf2.empty()
-        dl_btn = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 결과 출력 ---
 if st.session_state['results']:
     selected_images = []
+    # 모바일에서 한 줄에 두 개 버튼이 깨지지 않게 3열 구조 유지
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
-        # 현재 선택 상태 확인
         is_this_selected = st.session_state.get(f"chk_{idx}", False)
         
         with cols[idx % 3]:
@@ -164,29 +163,44 @@ if st.session_state['results']:
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
             
+            # 버튼 가로 배치를 위한 컬럼 생성
             b_col1, b_col2 = st.columns(2)
             with b_col1:
                 if st.button("🔍 보기", key=f"btn_{idx}"):
                     show_full_image(img['orig'], img['source'])
             with b_col2:
-                # 선택 시 파란색 배경 스타일이 적용된 체크박스
                 if st.checkbox("선택", key=f"chk_{idx}"):
                     selected_images.append(img)
             st.markdown('</div>', unsafe_allow_html=True)
 
+    # --- 하단 고정 다운로드 바 ---
     if selected_images:
-        sel_info.write(f"📍 **{len(selected_images)}**장")
-        with dl_btn:
-            zip_buffer = BytesIO()
-            KST = timezone(timedelta(hours=9))
-            now_str = datetime.now(KST).strftime("%Y%m%d_%H%M")
-            
-            with zipfile.ZipFile(zip_buffer, "w") as zf:
-                for i, si in enumerate(selected_images):
-                    try:
-                        res = requests.get(si['orig'], timeout=10)
-                        clean_query = query.replace(" ", "_")
-                        file_name = f"{clean_query}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg"
-                        zf.writestr(file_name, res.content)
-                    except: continue
-            st.download_button(f"📥 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_{now_str}.zip", use_container_width=True)
+        zip_buffer = BytesIO()
+        KST = timezone(timedelta(hours=9))
+        now_str = datetime.now(KST).strftime("%Y%m%d_%H%M")
+        
+        with zipfile.ZipFile(zip_buffer, "w") as zf:
+            for i, si in enumerate(selected_images):
+                try:
+                    res = requests.get(si['orig'], timeout=10)
+                    clean_query = query.replace(" ", "_")
+                    file_name = f"{clean_query}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg"
+                    zf.writestr(file_name, res.content)
+                except: continue
+        
+        # 하단 바 구현
+        st.markdown(f"""
+            <div class="download-bar">
+                <span style="font-weight:bold; color:#2196F3;">📍 {len(selected_images)}장 선택됨</span>
+            </div>
+        """, unsafe_allow_html=True)
+        # 하단 바 위에 실제 클릭 가능한 버튼 배치 (Streamlit 제한상 바 위에 겹침)
+        st.sidebar.markdown("---") # 사이드바는 모바일에서 숨겨지므로 사용 X
+        
+        # 실제 버튼은 스크롤 최하단에도 배치하여 편의성 제공
+        st.download_button(
+            label=f"📥 {len(selected_images)}장 최종 다운로드",
+            data=zip_buffer.getvalue(),
+            file_name=f"{query}_{now_str}.zip",
+            use_container_width=True
+        )
