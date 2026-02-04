@@ -6,7 +6,7 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 버튼 강조 및 일체형 카드 디자인 ---
+# --- CSS: 버튼 칼정렬 및 선택 시 이미지 블러 효과 ---
 st.markdown("""
     <style>
     /* 1. 상단 고정 레이아웃 */
@@ -26,18 +26,25 @@ st.markdown("""
         padding: 15px;
         margin-bottom: 20px;
         background-color: #ffffff;
+        display: flex;
+        flex-direction: column;
     }
 
-    /* 3. 버튼 칼정렬 및 선택 시 색상 변화 */
+    /* 3. [핵심] 이미지 블러 효과 - 선택 시 흐려짐 */
+    .selected-img img {
+        filter: blur(4px) grayscale(30%);
+        transition: filter 0.3s ease;
+    }
+
+    /* 4. 보기/선택 버튼 높이 칼정렬 (45px 고정) */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
         font-weight: bold !important;
         width: 100% !important;
-        transition: all 0.2s ease;
+        margin: 0 !important;
     }
 
-    /* [핵심] 선택하기 체크박스를 버튼처럼 보이게 스타일링 (또는 체크박스 강조) */
     div[data-testid="stCheckbox"] {
         height: 45px !important;
         border-radius: 12px;
@@ -47,9 +54,10 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: center;
+        margin-top: 0px !important; /* 위쪽 여백 제거로 버튼과 라인 맞춤 */
     }
     
-    /* 선택되었을 때의 시각적 변화 (체크박스 배경 강조) */
+    /* 선택 시 체크박스 배경 파란색으로 변경 */
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
         background-color: #2196F3 !important;
         border-color: #2196F3 !important;
@@ -102,7 +110,6 @@ with st.container():
     if st.button("📸 사진 검색 시작", use_container_width=True):
         if query:
             st.session_state.search_clicked = True
-            # API 키 호출 및 검색 로직 (기존 유지)
             results = []
             try:
                 p_key = st.secrets["PEXELS_API_KEY"]
@@ -135,18 +142,25 @@ if st.session_state['results']:
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
+        is_this_selected = st.session_state.get(f"chk_{idx}", False)
+        
         with cols[idx % 3]:
-            # 일체형 카드 박스 시작
             st.markdown('<div class="image-card-container">', unsafe_allow_html=True)
+            
+            # 선택 여부에 따라 'selected-img' 클래스 부여 (블러 처리용)
+            img_class = "selected-img" if is_this_selected else ""
+            st.markdown(f'<div class="{img_class}">', unsafe_allow_html=True)
             st.image(img['url'], use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
             
+            # 버튼 영역 (수평 정렬)
             b_col1, b_col2 = st.columns(2)
             with b_col1:
                 if st.button("🔍 보기", key=f"btn_{idx}"):
                     show_full_image(img['orig'], img['source'])
             with b_col2:
-                # 선택 시 배경색이 변하도록 CSS 적용됨
                 if st.checkbox("선택하기", key=f"chk_{idx}"):
                     selected_images.append(img)
             st.markdown('</div>', unsafe_allow_html=True)
