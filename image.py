@@ -8,7 +8,7 @@ import time
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 기존 UI 유지 및 모바일 최적화 보강 ---
+# --- CSS: 웹 레이아웃 복구 및 모바일 전용 스타일 분리 ---
 st.markdown("""
     <style>
     /* 1. 상단 UI (PC 고정) */
@@ -22,22 +22,7 @@ st.markdown("""
         border-bottom: 1px solid #e1e4e8;
     }
 
-    @media (max-width: 768px) {
-        div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
-            position: relative !important;
-            box-shadow: none !important;
-            padding: 10px 5px;
-        }
-        
-        /* 모바일에서 버튼 간격 및 정렬 조정 */
-        [data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-            min-width: 100% !important;
-        }
-    }
-
-    /* 2. 이미지 카드 스타일 (기존 유지) */
+    /* 2. 웹/모바일 공통 카드 스타일 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
@@ -50,7 +35,34 @@ st.markdown("""
         transition: filter 0.3s ease;
     }
 
-    /* 3. 버튼 및 선택 체크박스 UI (절대 보존) */
+    /* 3. [중요] 버튼 레이아웃 제어 */
+    /* 기본적으로(웹) 버튼 컬럼을 가로로 나열 */
+    div.row-widget.stHorizontal {
+        gap: 10px;
+    }
+
+    @media (max-width: 768px) {
+        /* 모바일 상단 고정 해제 */
+        div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
+            position: relative !important;
+            box-shadow: none !important;
+            padding: 10px 5px;
+        }
+        
+        /* 모바일에서 보기 버튼 숨기기 */
+        .mobile-view-hide {
+            display: none !important;
+        }
+        
+        /* 모바일에서 선택 버튼 컬럼을 100%로 확장 */
+        div[data-testid="column"]:has(div.mobile-view-full) {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+    }
+
+    /* 4. 버튼 및 선택 체크박스 UI (절대 보존) */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
@@ -65,7 +77,7 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-top: 0px !important;
+        width: 100% !important;
     }
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
         background-color: #2196F3 !important;
@@ -86,12 +98,6 @@ st.markdown("""
     }
     </style>
     """, unsafe_allow_html=True)
-
-# --- 모바일 감지 스크립트 (가로 너비 기준) ---
-# Streamlit에서 모바일을 정확히 구분하기 위해 width를 체크하는 로직
-is_mobile = False
-# 간단한 꼼수로 sidebar의 상태나 viewport를 활용할 수 있지만, 
-# 여기서는 CSS 기반으로 버튼을 완전히 날려버리는 방식을 사용합니다.
 
 # --- 세션 초기화 ---
 if 'results' not in st.session_state: st.session_state['results'] = []
@@ -128,7 +134,6 @@ with st.container():
     query = col_search.text_input("검색어", placeholder="검색어를 입력하세요", label_visibility="collapsed")
     ratio_display = col_ratio.selectbox("비율", ["가로형", "세로형", "정사각형"], key="orient_select", on_change=on_ratio_change, label_visibility="collapsed")
     
-    # [모바일 대응] 고급 필터를 닫아 놓음 (expanded=False)
     with st.expander("⚙️ 고급 필터", expanded=False):
         f1, f2, f3 = st.columns(3)
         min_w = f1.number_input("가로(px)", key="width_input", min_value=0, value=1920)
@@ -174,7 +179,6 @@ with st.container():
                         zf.writestr(f"{query.replace(' ','_')}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg", res.content)
                     except: continue
             
-            # 상단 다운로드 버튼 (1번째)
             inf_col3.download_button(
                 label=f"📥 {len(temp_selected)}장 다운로드",
                 data=zip_buffer.getvalue(),
@@ -197,21 +201,22 @@ if st.session_state['results']:
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
             
-            # 버튼 영역: 모바일 전용 CSS로 '보기' 버튼을 강제로 소멸시킴
-            btn_col_main = st.columns([1, 1])
-            with btn_col_main[0]:
-                # PC에서는 보이고 모바일(768px 이하)에서는 CSS display:none 처리
+            # 버튼 영역 복구: 웹에서는 5:5 비율 유지
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
                 st.markdown('<div class="mobile-view-hide">', unsafe_allow_html=True)
                 if st.button("🔍 보기", key=f"btn_{idx}"):
                     show_full_image(img['orig'], img['source'])
                 st.markdown('</div>', unsafe_allow_html=True)
             
-            with btn_col_main[1]:
-                # 모바일에서는 이 컬럼이 100% 너비를 갖게 되어 버튼이 꽉 참
+            with btn_col2:
+                # 모바일에서 이 div를 포함한 컬럼이 100%가 되도록 CSS 설정
+                st.markdown('<div class="mobile-view-full">', unsafe_allow_html=True)
                 st.checkbox("선택", key=f"chk_{idx}")
+                st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 하단 다운로드 버튼 (2번째)
+    # 하단 다운로드 버튼
     temp_selected_bottom = [img for idx, img in enumerate(st.session_state['results']) if st.session_state.get(f"chk_{idx}", False)]
     if temp_selected_bottom:
         st.markdown("---")
