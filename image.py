@@ -6,10 +6,10 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 둥근 테두리 일체형 박스 및 유령 테두리 박멸 ---
+# --- CSS: 유령 테두리 완전 삭제 및 일체형 박스 구성 ---
 st.markdown("""
     <style>
-    /* 1. 상단 고정 UI (기능 유지) */
+    /* 1. 상단 UI 고정 */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
         top: 2.8rem;
@@ -19,23 +19,25 @@ st.markdown("""
         border-bottom: 2px solid #f0f2f6;
     }
 
-    /* 2. 유령 테두리(파란색 빈 박스) 강제 숨김 */
-    div[data-testid="stVerticalBlock"] > div:empty { display: none !important; }
-    div[data-testid="stHorizontalBlock"] > div:empty { display: none !important; }
+    /* 2. 유령 테두리(파란색 빈 박스) 및 불필요한 공백 완전 박멸 */
+    div[data-testid="stVerticalBlock"] > div:empty,
+    div[data-testid="stHorizontalBlock"] > div:empty,
+    div[data-testid="stMarkdownContainer"] > p:empty {
+        display: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
     *:focus { outline: none !important; box-shadow: none !important; }
 
-    /* 3. 요청하신 '완벽한 일체형 둥근 박스' 디자인 */
-    .image-container-box {
+    /* 3. 일체형 둥근 카드 디자인 */
+    .image-card-box {
         background-color: #ffffff;
-        border: 1px solid #e0e0e0;
-        border-radius: 20px; /* 더 둥근 테두리 */
+        border: 1px solid #e1e4e8;
+        border-radius: 18px;
         padding: 15px;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        display: flex;
-        flex-direction: column;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.03);
     }
-    
     .selected-card {
         border: 2px solid #2196F3 !important;
         background-color: #f0f7ff !important;
@@ -44,36 +46,27 @@ st.markdown("""
     /* 4. 버튼 및 체크박스 칼정렬 (높이 45px 고정) */
     .stButton > button {
         height: 45px !important;
-        border-radius: 12px !important;
+        border-radius: 10px !important;
         font-weight: bold !important;
         width: 100% !important;
-        border: 1px solid #ddd !important;
     }
-
     div[data-testid="stCheckbox"] {
         height: 45px !important;
-        background-color: #ffffff;
-        border: 1px solid #ddd;
-        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid #dcdfe6;
+        border-radius: 10px;
         display: flex;
         align-items: center;
-        justify-content: center;
-        width: 100% !important;
         padding: 0 10px !important;
+        width: 100% !important;
     }
-
-    .source-text {
-        font-size: 0.9rem;
-        color: #666;
-        font-weight: bold;
-        margin: 10px 0;
-    }
-
-    .stImage img { border-radius: 12px; }
+    
+    .source-label { font-size: 0.85rem; color: #555; font-weight: bold; margin: 10px 0; }
+    .stImage img { border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 세션 초기화 (픽셀 0 표시 방지) ---
+# --- 세션 초기화 ---
 if 'width_input' not in st.session_state: st.session_state['width_input'] = 1920
 if 'height_input' not in st.session_state: st.session_state['height_input'] = 1080
 if 'results' not in st.session_state: st.session_state['results'] = []
@@ -96,13 +89,12 @@ def on_ratio_change():
     else:
         st.session_state.width_input, st.session_state.height_input = 1080, 1080
 
-# --- 크게 보기 다이얼로그 (기능 복구) ---
 @st.dialog("🔍 이미지 크게 보기", width="large")
 def show_full_image(img_url, source):
     st.write(f"출처: **{source}**")
     st.image(img_url, use_container_width=True)
 
-# --- 상단 레이아웃 ---
+# --- 상단 UI (원래 위치 복구) ---
 with st.container():
     st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
     st.title("📸 이미지 수집기 Pro")
@@ -111,7 +103,6 @@ with st.container():
     query = col_search.text_input("검색어", placeholder="검색어를 입력하세요", label_visibility="collapsed")
     ratio_display = col_ratio.selectbox("비율", ["가로형", "세로형", "정사각형"], key="orient_select", on_change=on_ratio_change, label_visibility="collapsed")
     
-    # 고급 필터 기본 열림 (expanded=True)
     with st.expander("⚙️ 고급 필터 (해상도/개수)", expanded=True):
         f1, f2, f3 = st.columns(3)
         min_w = f1.number_input("가로(px)", key="width_input", min_value=0)
@@ -137,28 +128,29 @@ with st.container():
             except: pass
             st.session_state['results'] = results
             st.rerun()
+
+    # [중요] 선택 표시와 다운로드 버튼을 다시 상단으로 복구
+    if st.session_state.search_clicked:
+        inf1, inf2, inf3 = st.columns([1, 1, 1.5])
+        inf1.write(f"📊 결과: **{len(st.session_state['results'])}**장")
+        select_placeholder = inf2.empty()
+        download_placeholder = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 이미지 결과 (일체형 박스 구성) ---
-if st.session_state.search_clicked:
-    st.subheader(f"📊 검색 결과: {len(st.session_state['results'])}장")
+# --- 결과 영역 ---
+if st.session_state['results']:
     selected_images = []
-    
-    # 3열 구성
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
         is_selected = st.session_state.get(f"chk_{idx}", False)
-        card_class = "image-container-box selected-card" if is_selected else "image-container-box"
+        card_class = "image-card-box selected-card" if is_selected else "image-card-box"
         
         with cols[idx % 3]:
-            # 하나의 박스 안에 모든 내용물을 넣음
             st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
-            
             st.image(img['url'], use_container_width=True)
-            st.markdown(f'<div class="source-text">📍 출처: {img["source"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="source-label">📍 출처: {img["source"]}</div>', unsafe_allow_html=True)
             
-            # 버튼 영역 (칼정렬)
             b_col1, b_col2 = st.columns(2)
             with b_col1:
                 if st.button("🔍 보기", key=f"btn_{idx}"):
@@ -166,15 +158,17 @@ if st.session_state.search_clicked:
             with b_col2:
                 if st.checkbox("선택", key=f"chk_{idx}"):
                     selected_images.append(img)
-            
             st.markdown('</div>', unsafe_allow_html=True)
-
-    # 하단 다운로드
+    
+    # 상단 Placeholder에 다운로드 로직 연결
     if selected_images:
-        st.divider()
-        zip_buffer = BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w") as zf:
-            for i, si in enumerate(selected_images):
-                res = requests.get(si['orig'])
-                zf.writestr(f"image_{i+1}.jpg", res.content)
-        st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name="images.zip", use_container_width=True)
+        select_placeholder.write(f"📍 **{len(selected_images)}**장 선택됨")
+        with download_placeholder:
+            zip_buffer = BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w") as zf:
+                for i, si in enumerate(selected_images):
+                    try:
+                        res = requests.get(si['orig'], timeout=10)
+                        zf.writestr(f"{i+1:02d}.jpg", res.content)
+                    except: continue
+            st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name="images.zip")
