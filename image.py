@@ -6,20 +6,17 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# CSS: 타원형 포커스 라인 제거 및 버튼 줄 맞춤
+# --- [강력 처방] CSS: 포커스 라인 제거 및 버튼 높이 완전 일치 ---
 st.markdown("""
     <style>
-    /* 1. 상단 파란색 타원형(포커스 라인) 및 불필요한 테두리 강제 제거 */
-    *:focus {
+    /* 1. 제발 좀 사라져! 파란색 타원형 포커스 라인 완전 박멸 */
+    *:focus, *:focus-visible, .stSelectbox div, .stButton button {
         outline: none !important;
         box-shadow: none !important;
+        border-color: rgba(0,0,0,0) !important;
     }
-    .stSelectbox div[data-baseweb="select"] {
-        outline: none !important;
-        border: 1px solid #ebedf0 !important;
-    }
-
-    /* 상단 UI 고정 */
+    
+    /* 2. 상단 UI 고정 */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
         top: 2.8rem;
@@ -29,76 +26,65 @@ st.markdown("""
         border-bottom: 2px solid #f0f2f6;
     }
     
-    /* 카드 전체 박스 스타일 */
+    /* 3. 카드 통합 박스 */
     .image-card {
         background-color: #ffffff;
         border-radius: 12px;
         border: 2px solid #f0f2f6;
         padding: 15px;
         margin-bottom: 20px;
-        transition: all 0.2s ease;
     }
-
-    /* 선택 시 카드 색상 및 눌림 효과 */
     .selected-card {
         border-color: #2196F3 !important;
         background-color: #f0f7ff !important;
     }
 
-    /* 버튼 및 체크박스 눌림 효과 */
-    .stButton button:active, 
-    div[data-testid="stCheckbox"]:active {
-        transform: scale(0.96);
-    }
-
-    /* 사진 하단 정보 텍스트 */
-    .source-text {
-        font-size: 0.85rem;
-        color: #555;
-        font-weight: 600;
-        margin: 10px 0;
-    }
-
-    /* 2. 보기 버튼과 선택 체크박스 줄 맞춤 (높이 고정) */
+    /* 4. 보기/선택 버튼 높이 칼정렬 (45px 고정) */
     .stButton>button {
-        height: 42px !important;
+        height: 45px !important;
+        line-height: 45px !important;
+        padding: 0 !important;
         border-radius: 8px;
         font-weight: bold;
         width: 100%;
+    }
+
+    /* 체크박스 컨테이너 높이를 버튼과 동일하게 맞춤 */
+    div[data-testid="stCheckbox"] {
+        height: 45px !important;
+        background: #ffffff;
+        border: 1px solid #dcdfe6;
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
-    }
-
-    div[data-testid="stCheckbox"] {
-        height: 42px !important;
-        background: #ffffff;
-        border: 1px solid #dcdfe6;
         padding: 0 10px !important;
-        border-radius: 8px;
-        width: 100%;
-        display: flex;
-        align-items: center;
-        margin-top: 0px; /* 버튼과의 수직 정렬 보정 */
+        margin-top: 0px !important;
     }
 
+    /* 5. 클릭 시 눌리는 효과 */
+    .stButton button:active, div[data-testid="stCheckbox"]:active {
+        transform: scale(0.95);
+    }
+
+    .source-text { font-size: 0.9rem; color: #444; font-weight: bold; margin: 10px 0; }
     .stImage img { border-radius: 8px; }
-    .stDownloadButton>button { background-color: #2196F3; color: white; }
     </style>
     """, unsafe_allow_html=True)
 
-# API 키 및 세션 초기화 (기본값 0 방지)
+# --- 세션 초기화 (0 방지용 최상단 배치) ---
+if 'width_input' not in st.session_state: st.session_state['width_input'] = 1920
+if 'height_input' not in st.session_state: st.session_state['height_input'] = 1080
+if 'results' not in st.session_state: st.session_state['results'] = []
+if 'search_clicked' not in st.session_state: st.session_state['search_clicked'] = False
+
+# API 키 확인
 try:
     PEXELS_API_KEY = st.secrets["PEXELS_API_KEY"]
     PIXABAY_API_KEY = st.secrets["PIXABAY_API_KEY"]
 except:
     st.error("⚠️ API 키 설정 필요")
     st.stop()
-
-if 'width_input' not in st.session_state: st.session_state['width_input'] = 1920
-if 'height_input' not in st.session_state: st.session_state['height_input'] = 1080
-if 'results' not in st.session_state: st.session_state['results'] = []
-if 'search_clicked' not in st.session_state: st.session_state['search_clicked'] = False
 
 def on_ratio_change():
     ratio = st.session_state.orient_select
@@ -151,12 +137,12 @@ with st.container():
 
     if st.session_state.search_clicked:
         inf1, inf2, inf3 = st.columns([1, 1, 1.5])
-        inf1.write(f"📊 검색 결과: **{len(st.session_state['results'])}**장")
+        inf1.write(f"📊 결과: **{len(st.session_state['results'])}**장")
         select_placeholder = inf2.empty()
         download_placeholder = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 이미지 결과 영역 ---
+# --- 결과 영역 ---
 if st.session_state['results']:
     selected_images = []
     cols = st.columns(3)
@@ -167,14 +153,10 @@ if st.session_state['results']:
         
         with cols[idx % 3]:
             st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
-            
-            # 1. 사진
             st.image(img['url'], use_container_width=True)
-            
-            # 2. 출처 텍스트
             st.markdown(f'<div class="source-text">📍 출처: {img["source"]}</div>', unsafe_allow_html=True)
             
-            # 3. 버튼 및 체크박스 (동일 높이 정렬)
+            # 버튼과 체크박스 칼정렬 배치
             b_col1, b_col2 = st.columns(2)
             with b_col1:
                 if st.button("🔍 보기", key=f"exp_{idx}"):
@@ -185,7 +167,6 @@ if st.session_state['results']:
             
             st.markdown('</div>', unsafe_allow_html=True)
     
-    # 하단 다운로드바 로직
     if selected_images:
         select_placeholder.write(f"📍 **{len(selected_images)}**장 선택됨")
         with download_placeholder:
