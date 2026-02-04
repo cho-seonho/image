@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import zipfile
 from io import BytesIO
+from datetime import datetime  # 날짜/시간 추가를 위한 모듈
 
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
@@ -156,17 +157,21 @@ if st.session_state['results']:
                     selected_images.append(img)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # [핵심 수정] 파일명에 검색어와 출처 포함
+    # [핵심 수정] 파일명에 검색어, 출처, 날짜, 시간 포함
     if selected_images:
         sel_info.write(f"📍 **{len(selected_images)}**장 선택됨")
         with dl_btn:
             zip_buffer = BytesIO()
+            # 현재 시간 포맷팅 (예: 20260204_1203)
+            now_str = datetime.now().strftime("%Y%m%d_%H%M")
+            
             with zipfile.ZipFile(zip_buffer, "w") as zf:
                 for i, si in enumerate(selected_images):
                     try:
                         res = requests.get(si['orig'], timeout=10)
-                        # 파일명 예시: 검색어_01_Pexels.jpg
                         clean_query = query.replace(" ", "_")
-                        zf.writestr(f"{clean_query}_{i+1:02d}_{si['source']}.jpg", res.content)
+                        # 요청하신 포맷: banana_pixabay_01_20260204_1203.jpg
+                        file_name = f"{clean_query}_{si['source'].lower()}_{i+1:02d}_{now_str}.jpg"
+                        zf.writestr(file_name, res.content)
                     except: continue
-            st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_수집.zip")
+            st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_{now_str}.zip")
