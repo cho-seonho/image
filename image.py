@@ -6,7 +6,7 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# CSS: 선택 효과 강화 및 레이아웃 고정
+# CSS: 카드 통합 레이아웃 및 버튼 누름 효과
 st.markdown("""
     <style>
     /* 상단 UI 고정 */
@@ -19,63 +19,57 @@ st.markdown("""
         border-bottom: 2px solid #f0f2f6;
     }
     
-    /* 카드 레이아웃 고정 (픽셀 밀림 방지) */
+    /* 1. 출처, 사진, 보기, 선택을 하나로 묶는 박스(카드) */
     .image-card {
         background-color: #ffffff;
         border-radius: 12px;
-        border: 2px solid #e1e4e8;
-        padding: 10px;
-        margin-bottom: 15px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        position: relative;
-        transition: all 0.3s ease;
-        height: auto;
+        border: 2px solid #f0f2f6;
+        padding: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        transition: all 0.2s ease;
     }
 
-    /* 선택되었을 때의 스타일 (강력한 피드백) */
+    /* 2. 선택 시 카드 변화 */
     .selected-card {
-        border: 2px solid #2196F3 !important;
-        background-color: #e3f2fd !important;
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(33, 150, 243, 0.2);
+        border-color: #2196F3 !important;
+        background-color: #f0f7ff !important;
     }
 
-    /* 이미지 스타일 */
-    .stImage img {
-        border-radius: 8px;
+    /* 3. 버튼 및 선택 박스가 눌리는 효과 (Active 상태) */
+    div[data-testid="stCheckbox"] label:active,
+    .stButton button:active {
+        transform: scale(0.96); /* 살짝 작아지며 눌리는 느낌 */
+        transition: 0.1s;
     }
 
-    /* 출처 태그 오버레이 */
-    .source-overlay {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        background: rgba(0, 0, 0, 0.6);
+    /* 출처 태그 디자인 */
+    .source-tag {
+        font-size: 0.75rem;
+        background-color: #333;
         color: white;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.7rem;
-        font-weight: bold;
-        z-index: 10;
+        padding: 2px 10px;
+        border-radius: 20px;
+        margin-bottom: 10px;
+        display: inline-block;
     }
 
-    /* 버튼 및 체크박스 스타일 고정 */
-    .stButton>button { border-radius: 8px; height: 2.5em; font-size: 0.9rem; }
+    .stImage img { border-radius: 8px; }
+    .stButton>button { border-radius: 8px; font-weight: bold; }
     .stDownloadButton>button { background-color: #2196F3; color: white; border-radius: 8px; }
-    
-    /* 체크박스 영역 높이 고정 (픽셀 움직임 방지) */
+
+    /* 체크박스 가독성 및 정렬 */
     div[data-testid="stCheckbox"] {
-        height: 40px;
-        display: flex;
-        align-items: center;
-        background-color: #f8f9fa;
-        padding-left: 10px;
-        border-radius: 6px;
+        background: white;
+        border: 1px solid #ddd;
+        padding: 5px 10px;
+        border-radius: 8px;
+        width: 100%;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# API 키 및 세션 초기화 (기존 로직 유지)
+# API 키 및 세션 초기화
 try:
     PEXELS_API_KEY = st.secrets["PEXELS_API_KEY"]
     PIXABAY_API_KEY = st.secrets["PIXABAY_API_KEY"]
@@ -85,8 +79,6 @@ except:
 
 if 'results' not in st.session_state: st.session_state['results'] = []
 if 'search_clicked' not in st.session_state: st.session_state['search_clicked'] = False
-if 'width_input' not in st.session_state: st.session_state['width_input'] = 1920
-if 'height_input' not in st.session_state: st.session_state['height_input'] = 1080
 
 def on_ratio_change():
     ratio = st.session_state.orient_select
@@ -123,12 +115,13 @@ with st.container():
             results = []
             orient_map = {"가로형": "landscape", "세로형": "portrait", "정사각형": "square"}
             try:
+                # Pexels
                 p_res = requests.get(f"https://api.pexels.com/v1/search?query={query}&per_page={count}&orientation={orient_map[ratio_display]}", 
                                      headers={"Authorization": PEXELS_API_KEY}).json()
                 for img in p_res.get('photos', []):
                     if img['width'] >= min_w and img['height'] >= min_h:
                         results.append({'url': img['src']['large'], 'orig': img['src']['original'], 'source': 'Pexels'})
-                
+                # Pixabay
                 px_res = requests.get(f"https://pixabay.com/api/?key={PIXABAY_API_KEY}&q={query}&image_type=photo&orientation={orient_map[ratio_display]}&per_page={count}").json()
                 for img in px_res.get('hits', []):
                     if img['imageWidth'] >= min_w and img['imageHeight'] >= min_h:
@@ -144,37 +137,38 @@ with st.container():
         download_placeholder = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 이미지 결과 영역 ---
+# --- 이미지 결과 영역 (박스 통합 디자인) ---
 if st.session_state['results']:
     selected_images = []
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
-        # 개별 체크박스 상태 확인
         is_selected = st.session_state.get(f"chk_{idx}", False)
+        # 선택 여부에 따른 박스 클래스 적용
         card_class = "image-card selected-card" if is_selected else "image-card"
         
         with cols[idx % 3]:
-            # 카드 디자인 적용
-            st.markdown(f'''
-                <div class="{card_class}">
-                    <div class="source-overlay">{img["source"]}</div>
-            ''', unsafe_allow_html=True)
+            # 하나의 박스로 묶기 시작
+            st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
             
+            # 출처 표시
+            st.markdown(f'<div class="source-tag">{img["source"]}</div>', unsafe_allow_html=True)
+            
+            # 이미지
             st.image(img['url'], use_container_width=True)
             
-            c_btn1, c_btn2 = st.columns([1, 1])
-            with c_btn1:
+            # 보기 및 선택 버튼 한 줄 배치
+            b_col1, b_col2 = st.columns(2)
+            with b_col1:
                 if st.button("🔍 보기", key=f"exp_{idx}"):
                     show_full_image(img['orig'], img['source'])
-            with c_btn2:
-                # '선택'으로 문구 간소화 및 픽셀 밀림 방지 처리
+            with b_col2:
                 if st.checkbox("선택", key=f"chk_{idx}"):
                     selected_images.append(img)
             
+            # 박스 닫기
             st.markdown('</div>', unsafe_allow_html=True)
     
-    # 다운로드 및 상태 업데이트
     if selected_images:
         select_placeholder.write(f"📍 **{len(selected_images)}**장 선택됨")
         with download_placeholder:
