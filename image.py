@@ -8,10 +8,10 @@ import time
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 모바일 2열 강제 및 UI 고정 해제 ---
+# --- CSS: 버튼 정렬 절대 고정 및 모바일 2열 ---
 st.markdown("""
     <style>
-    /* 1. 상단 UI 고정 (PC 전용) */
+    /* 1. 상단 UI: PC 고정 / 모바일 해제 */
     @media (min-width: 769px) {
         div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
             position: sticky;
@@ -23,49 +23,57 @@ st.markdown("""
             border-bottom: 1px solid #e1e4e8;
         }
     }
-
-    /* 2. 모바일 UI (고정 해제 및 2열 그리드 강제) */
     @media (max-width: 768px) {
-        /* 상단 UI 고정 완전 해제 */
         div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
             position: relative !important;
-            top: auto !important;
             box-shadow: none !important;
-            border-bottom: none !important;
             padding: 10px 5px !important;
         }
-
-        /* [핵심] 1개씩 나오는 현상 방지: 모든 컬럼 가로 배치 강제 */
-        div[data-testid="stHorizontalBlock"] {
+        /* 모바일 2열 강제 */
+        [data-testid="stHorizontalBlock"] {
             display: flex !important;
             flex-direction: row !important;
             flex-wrap: wrap !important;
-            align-items: stretch !important;
-            gap: 10px !important;
         }
-        
-        /* 메인 3열 중 각각을 50% 너비로 조정 (모바일은 2열이 됨) */
-        div[data-testid="column"] {
+        [data-testid="column"] {
             width: calc(50% - 10px) !important;
             flex: 1 1 calc(50% - 10px) !important;
             min-width: calc(50% - 10px) !important;
         }
-
-        /* 모바일 보기 버튼 삭제 */
-        div[data-testid="column"]:has(button[key^="btn_"]) {
-            display: none !important;
-        }
-        
-        /* 선택 버튼 컬럼을 100%로 채워 버튼처럼 보이게 함 */
-        div[data-testid="column"]:has(div[data-testid="stCheckbox"]) {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-        }
-        
-        .image-card-container { padding: 10px !important; border-radius: 15px !important; }
+        /* 모바일에서 보기 버튼 컬럼 삭제 */
+        div[data-testid="column"]:has(button[key^="btn_"]) { display: none !important; }
+        div[data-testid="column"]:has(div[data-testid="stCheckbox"]) { width: 100% !important; flex: 1 1 100% !important; }
     }
 
-    /* 3. 공통 스타일: 사진 흔들림 방지 및 파란색 버튼 */
+    /* 2. [절대 고정] 버튼 및 체크박스 정렬 스타일 */
+    .stButton > button {
+        height: 45px !important;
+        border-radius: 12px !important;
+        font-weight: bold !important;
+        width: 100% !important;
+    }
+    div[data-testid="stCheckbox"] {
+        height: 45px !important;
+        border-radius: 12px !important;
+        border: 1px solid #dcdfe6;
+        padding: 0 10px !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: white;
+        margin-top: 0px !important; /* 높이 틀어짐 방지 */
+    }
+    /* 파란색 선택 효과 */
+    div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
+        background-color: #2196F3 !important;
+        border-color: #2196F3 !important;
+    }
+    div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) label p {
+        color: white !important;
+        font-weight: bold !important;
+    }
+
+    /* 3. 사진 흔들림 방지 및 카드 스타일 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
@@ -79,30 +87,7 @@ st.markdown("""
         filter: blur(5px) grayscale(40%);
         transition: filter 0.2s ease-in-out;
     }
-    .stButton > button {
-        height: 45px !important;
-        border-radius: 12px !important;
-        font-weight: bold !important;
-    }
-    div[data-testid="stCheckbox"] {
-        height: 45px !important;
-        border-radius: 12px !important;
-        border: 1px solid #dcdfe6;
-        padding: 0 10px !important;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: white;
-    }
-    div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
-        background-color: #2196F3 !important;
-        border-color: #2196F3 !important;
-    }
-    div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) label p {
-        color: white !important;
-        font-weight: bold !important;
-    }
-    .source-label { font-size: 0.8rem; color: #666; margin: 5px 0; font-weight: bold; }
+    .source-label { font-size: 0.8rem; color: #666; margin: 8px 0; font-weight: bold; }
     .stImage img { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -162,15 +147,16 @@ with st.container():
             with zipfile.ZipFile(zip_buf, "w") as zf:
                 for i, si in enumerate(temp_sel):
                     try:
+                        # [파일명 규격 유지] 출처_검색어_숫자_날짜_시간
                         file_name = f"{si['source']}_{query.replace(' ','_')}_{i+1:02d}_{now_str}.jpg"
                         zf.writestr(file_name, requests.get(si['orig']).content)
                     except: continue
             inf3.download_button(f"📥 {len(temp_sel)}장 다운로드", zip_buf.getvalue(), f"{query}_{now_str}.zip", use_container_width=True, key="top_dl")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 결과 출력 (모바일 2열 강제 구조) ---
+# --- 결과 출력 (모바일 2열 고정) ---
 if st.session_state['results']:
-    # 2개씩 묶어서 한 줄(st.columns)에 넣음으로써 모바일 2열을 확실하게 보장함
+    # 2개씩 묶어 출력하여 모바일 2열 보장
     for i in range(0, len(st.session_state['results']), 2):
         row_cols = st.columns(2)
         for j in range(2):
@@ -185,6 +171,7 @@ if st.session_state['results']:
                     st.markdown('</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
                     
+                    # [버튼 정렬 영역 - 절대 수정 금지]
                     b_col1, b_col2 = st.columns([1, 1])
                     with b_col1:
                         if st.button("🔍 보기", key=f"btn_{idx}"): show_full_image(img['orig'], img['source'])
