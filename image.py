@@ -6,9 +6,19 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# CSS: 타원형 제거 및 박스 내부 완전 통합
+# CSS: 타원형 포커스 라인 제거 및 버튼 줄 맞춤
 st.markdown("""
     <style>
+    /* 1. 상단 파란색 타원형(포커스 라인) 및 불필요한 테두리 강제 제거 */
+    *:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    .stSelectbox div[data-baseweb="select"] {
+        outline: none !important;
+        border: 1px solid #ebedf0 !important;
+    }
+
     /* 상단 UI 고정 */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
@@ -24,59 +34,60 @@ st.markdown("""
         background-color: #ffffff;
         border-radius: 12px;
         border: 2px solid #f0f2f6;
-        padding: 12px;
+        padding: 15px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
         transition: all 0.2s ease;
     }
 
-    /* 선택 시 카드 색상 변화 */
+    /* 선택 시 카드 색상 및 눌림 효과 */
     .selected-card {
         border-color: #2196F3 !important;
         background-color: #f0f7ff !important;
     }
 
-    /* 박스 내부 하단 정보 영역 */
-    .info-container {
-        margin-top: 12px;
-        padding-top: 10px;
-        border-top: 1px solid #eee;
-    }
-
-    /* 출처 텍스트 스타일 (상단 타원형 대신 텍스트로 깔끔하게) */
-    .source-text {
-        font-size: 0.85rem;
-        color: #666;
-        font-weight: bold;
-        margin-bottom: 8px;
-    }
-
-    /* 클릭 시 눌리는 효과 */
+    /* 버튼 및 체크박스 눌림 효과 */
     .stButton button:active, 
     div[data-testid="stCheckbox"]:active {
-        transform: scale(0.95);
-        transition: 0.1s;
+        transform: scale(0.96);
+    }
+
+    /* 사진 하단 정보 텍스트 */
+    .source-text {
+        font-size: 0.85rem;
+        color: #555;
+        font-weight: 600;
+        margin: 10px 0;
+    }
+
+    /* 2. 보기 버튼과 선택 체크박스 줄 맞춤 (높이 고정) */
+    .stButton>button {
+        height: 42px !important;
+        border-radius: 8px;
+        font-weight: bold;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    div[data-testid="stCheckbox"] {
+        height: 42px !important;
+        background: #ffffff;
+        border: 1px solid #dcdfe6;
+        padding: 0 10px !important;
+        border-radius: 8px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        margin-top: 0px; /* 버튼과의 수직 정렬 보정 */
     }
 
     .stImage img { border-radius: 8px; }
-    .stButton>button { border-radius: 8px; font-weight: bold; width: 100%; height: 40px; }
-    .stDownloadButton>button { background-color: #2196F3; color: white; border-radius: 8px; width: 100%; }
-
-    /* 체크박스 디자인 최적화 */
-    div[data-testid="stCheckbox"] {
-        background: #f9f9f9;
-        border: 1px solid #ddd;
-        padding: 5px 10px;
-        border-radius: 8px;
-        width: 100%;
-        height: 40px;
-        display: flex;
-        align-items: center;
-    }
+    .stDownloadButton>button { background-color: #2196F3; color: white; }
     </style>
     """, unsafe_allow_html=True)
 
-# API 키 및 세션 초기화 (기본값 0 방지 포함)
+# API 키 및 세션 초기화 (기본값 0 방지)
 try:
     PEXELS_API_KEY = st.secrets["PEXELS_API_KEY"]
     PIXABAY_API_KEY = st.secrets["PIXABAY_API_KEY"]
@@ -124,7 +135,6 @@ with st.container():
             results = []
             orient_map = {"가로형": "landscape", "세로형": "portrait", "정사각형": "square"}
             try:
-                # Pexels & Pixabay 검색 로직
                 p_res = requests.get(f"https://api.pexels.com/v1/search?query={query}&per_page={count}&orientation={orient_map[ratio_display]}", 
                                      headers={"Authorization": PEXELS_API_KEY}).json()
                 for img in p_res.get('photos', []):
@@ -141,12 +151,12 @@ with st.container():
 
     if st.session_state.search_clicked:
         inf1, inf2, inf3 = st.columns([1, 1, 1.5])
-        inf1.write(f"📊 검색: **{len(st.session_state['results'])}**장")
+        inf1.write(f"📊 검색 결과: **{len(st.session_state['results'])}**장")
         select_placeholder = inf2.empty()
         download_placeholder = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 이미지 결과 영역 (박스 완전 통합) ---
+# --- 이미지 결과 영역 ---
 if st.session_state['results']:
     selected_images = []
     cols = st.columns(3)
@@ -156,19 +166,15 @@ if st.session_state['results']:
         card_class = "image-card selected-card" if is_selected else "image-card"
         
         with cols[idx % 3]:
-            # 하나의 박스로 시작
             st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
             
             # 1. 사진
             st.image(img['url'], use_container_width=True)
             
-            # 2. 하단 정보 통합 영역 (출처 + 보기 + 선택)
-            st.markdown(f'''
-                <div class="info-container">
-                    <div class="source-text">📍 출처: {img["source"]}</div>
-                </div>
-            ''', unsafe_allow_html=True)
+            # 2. 출처 텍스트
+            st.markdown(f'<div class="source-text">📍 출처: {img["source"]}</div>', unsafe_allow_html=True)
             
+            # 3. 버튼 및 체크박스 (동일 높이 정렬)
             b_col1, b_col2 = st.columns(2)
             with b_col1:
                 if st.button("🔍 보기", key=f"exp_{idx}"):
@@ -179,7 +185,7 @@ if st.session_state['results']:
             
             st.markdown('</div>', unsafe_allow_html=True)
     
-    # 다운로드 로직
+    # 하단 다운로드바 로직
     if selected_images:
         select_placeholder.write(f"📍 **{len(selected_images)}**장 선택됨")
         with download_placeholder:
