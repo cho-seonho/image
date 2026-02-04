@@ -6,7 +6,7 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# CSS: 카드 통합 레이아웃 및 버튼 누름 효과
+# CSS: 카드 통합 레이아웃 및 버튼/박스 눌림 효과
 st.markdown("""
     <style>
     /* 상단 UI 고정 */
@@ -19,7 +19,7 @@ st.markdown("""
         border-bottom: 2px solid #f0f2f6;
     }
     
-    /* 1. 출처, 사진, 보기, 선택을 하나로 묶는 박스(카드) */
+    /* 카드 통합 디자인 */
     .image-card {
         background-color: #ffffff;
         border-radius: 12px;
@@ -30,20 +30,20 @@ st.markdown("""
         transition: all 0.2s ease;
     }
 
-    /* 2. 선택 시 카드 변화 */
+    /* 선택 시 카드 상태 변화 */
     .selected-card {
         border-color: #2196F3 !important;
         background-color: #f0f7ff !important;
     }
 
-    /* 3. 버튼 및 선택 박스가 눌리는 효과 (Active 상태) */
-    div[data-testid="stCheckbox"] label:active,
-    .stButton button:active {
-        transform: scale(0.96); /* 살짝 작아지며 눌리는 느낌 */
+    /* 버튼 및 체크박스 눌림 효과 (클릭 시) */
+    .stButton button:active, 
+    div[data-testid="stCheckbox"]:active {
+        transform: scale(0.95);
         transition: 0.1s;
     }
 
-    /* 출처 태그 디자인 */
+    /* 출처 태그 */
     .source-tag {
         font-size: 0.75rem;
         background-color: #333;
@@ -55,10 +55,10 @@ st.markdown("""
     }
 
     .stImage img { border-radius: 8px; }
-    .stButton>button { border-radius: 8px; font-weight: bold; }
-    .stDownloadButton>button { background-color: #2196F3; color: white; border-radius: 8px; }
+    .stButton>button { border-radius: 8px; font-weight: bold; width: 100%; }
+    .stDownloadButton>button { background-color: #2196F3; color: white; border-radius: 8px; width: 100%; }
 
-    /* 체크박스 가독성 및 정렬 */
+    /* 체크박스 스타일 */
     div[data-testid="stCheckbox"] {
         background: white;
         border: 1px solid #ddd;
@@ -77,6 +77,9 @@ except:
     st.error("⚠️ API 키 설정 필요")
     st.stop()
 
+# --- 기본 픽셀 값 0 방지를 위한 초기화 로직 ---
+if 'width_input' not in st.session_state: st.session_state['width_input'] = 1920
+if 'height_input' not in st.session_state: st.session_state['height_input'] = 1080
 if 'results' not in st.session_state: st.session_state['results'] = []
 if 'search_clicked' not in st.session_state: st.session_state['search_clicked'] = False
 
@@ -105,8 +108,9 @@ with st.container():
     
     with st.expander("⚙️ 고급 필터 (해상도/개수)"):
         f1, f2, f3 = st.columns(3)
-        min_w = f1.number_input("가로(px)", key="width_input", step=1, format="%d")
-        min_h = f2.number_input("세로(px)", key="height_input", step=1, format="%d")
+        # value 인자를 session_state와 연동하여 0이 되는 현상 방지
+        min_w = f1.number_input("가로(px)", key="width_input", min_value=0, step=10, format="%d")
+        min_h = f2.number_input("세로(px)", key="height_input", min_value=0, step=10, format="%d")
         count = f3.slider("개수", 10, 80, 20)
 
     if st.button("✅ 검색 완료 (다시 검색)" if st.session_state.search_clicked else "📸 사진 검색 및 분석 시작"):
@@ -137,27 +141,22 @@ with st.container():
         download_placeholder = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 이미지 결과 영역 (박스 통합 디자인) ---
+# --- 이미지 결과 영역 ---
 if st.session_state['results']:
     selected_images = []
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
         is_selected = st.session_state.get(f"chk_{idx}", False)
-        # 선택 여부에 따른 박스 클래스 적용
         card_class = "image-card selected-card" if is_selected else "image-card"
         
         with cols[idx % 3]:
-            # 하나의 박스로 묶기 시작
+            # 하나의 박스로 통합
             st.markdown(f'<div class="{card_class}">', unsafe_allow_html=True)
-            
-            # 출처 표시
             st.markdown(f'<div class="source-tag">{img["source"]}</div>', unsafe_allow_html=True)
-            
-            # 이미지
             st.image(img['url'], use_container_width=True)
             
-            # 보기 및 선택 버튼 한 줄 배치
+            # 보기 및 선택 버튼
             b_col1, b_col2 = st.columns(2)
             with b_col1:
                 if st.button("🔍 보기", key=f"exp_{idx}"):
@@ -165,8 +164,6 @@ if st.session_state['results']:
             with b_col2:
                 if st.checkbox("선택", key=f"chk_{idx}"):
                     selected_images.append(img)
-            
-            # 박스 닫기
             st.markdown('</div>', unsafe_allow_html=True)
     
     if selected_images:
@@ -180,5 +177,3 @@ if st.session_state['results']:
                         zf.writestr(f"{i+1:02d}_{si['source']}.jpg", res.content)
                     except: continue
             st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_수집.zip")
-    else:
-        select_placeholder.write("📍 0장 선택됨")
