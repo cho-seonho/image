@@ -8,10 +8,10 @@ import time
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 기존 UI 보존, 사진 움직임 방지 및 모바일 2열(Grid) 적용 ---
+# --- CSS: 모바일 2열 그리드 및 기존 UI 보존 ---
 st.markdown("""
     <style>
-    /* 상단 UI 고정 */
+    /* 1. 상단 UI 고정 */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
         top: 0;
@@ -22,14 +22,14 @@ st.markdown("""
         border-bottom: 1px solid #e1e4e8;
     }
 
-    /* 이미지 카드 및 흔들림 방지 */
+    /* 2. 이미지 카드 스타일 및 흔들림 방지 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
         padding: 15px;
         margin-bottom: 20px;
         background-color: #ffffff;
-        overflow: hidden; 
+        overflow: hidden;
     }
     .stImage { margin-bottom: 0px !important; }
     .selected-img img {
@@ -37,7 +37,7 @@ st.markdown("""
         transition: filter 0.2s ease-in-out;
     }
 
-    /* 버튼 및 파란색 선택 UI */
+    /* 3. 파란색 박스 버튼 UI (웹/모바일 공통) */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
@@ -64,25 +64,31 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* [핵심] 모바일 전용: 결과창 2열 배치 및 보기 버튼 삭제 */
+    /* 4. [수정 핵심] 모바일 2열 그리드 강제 적용 */
     @media (max-width: 768px) {
-        div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) { position: relative !important; box-shadow: none !important; }
-        
-        /* 결과 그리드를 2열로 강제 조정 (33% -> 50%) */
-        [data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-            width: calc(50% - 1rem) !important;
-            flex: 1 1 calc(50% - 1rem) !important;
-            min-width: calc(50% - 1rem) !important;
+        /* 결과물을 감싸는 컨테이너를 Grid로 변경 */
+        div[data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            flex-direction: row !important;
         }
-        
-        /* 모바일 보기 버튼 컬럼 완전 삭제 */
-        div[data-testid="column"]:has(button[key^="btn_"]) { display: none !important; }
-        
-        /* 선택 버튼을 100% 채우기 */
-        div[data-testid="column"]:has(div[data-testid="stCheckbox"]) { width: 100% !important; flex: 1 1 100% !important; }
-        
-        /* 카드 패딩 조절로 공간 확보 */
-        .image-card-container { padding: 8px; margin-bottom: 10px; }
+        /* 각 이미지 컬럼의 너비를 50%로 고정 */
+        div[data-testid="column"] {
+            width: 50% !important;
+            flex: 1 1 50% !important;
+            min-width: 50% !important;
+            padding: 5px !important;
+        }
+        /* 모바일에서 보기 버튼 삭제 */
+        div[data-testid="column"]:has(button[key^="btn_"]) {
+            display: none !important;
+        }
+        /* 선택 버튼을 100% 너비로 */
+        div[data-testid="column"]:has(div[data-testid="stCheckbox"]) {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+        .image-card-container { padding: 10px; border-radius: 15px; }
     }
 
     .source-label { font-size: 0.85rem; color: #666; margin: 10px 0; font-weight: bold; }
@@ -145,30 +151,36 @@ with st.container():
             with zipfile.ZipFile(zip_buf, "w") as zf:
                 for i, si in enumerate(temp_sel):
                     try:
-                        # [파일명 규격 유지] 출처_검색어_숫자_날짜_시간
+                        # [파일명 규격 보존]
                         file_name = f"{si['source']}_{query.replace(' ','_')}_{i+1:02d}_{now_str}.jpg"
                         zf.writestr(file_name, requests.get(si['orig']).content)
                     except: continue
             inf3.download_button(f"📥 {len(temp_sel)}장 다운로드", zip_buf.getvalue(), f"{query}_{now_str}.zip", use_container_width=True, key="top_dl")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 결과 출력 (모바일 2열 배치) ---
+# --- 결과 출력 ---
 if st.session_state['results']:
-    cols = st.columns(3) # 웹에서는 3열
-    for idx, img in enumerate(st.session_state['results']):
-        with cols[idx % 3]:
-            st.markdown('<div class="image-card-container">', unsafe_allow_html=True)
-            img_style = "selected-img" if st.session_state.get(f"chk_{idx}", False) else ""
-            st.markdown(f'<div class="{img_style}">', unsafe_allow_html=True)
-            st.image(img['url'], use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
-            b_col1, b_col2 = st.columns([1, 1])
-            with b_col1:
-                if st.button("🔍 보기", key=f"btn_{idx}"): show_full_image(img['orig'], img['source'])
-            with b_col2:
-                st.checkbox("선택", key=f"chk_{idx}")
-            st.markdown('</div>', unsafe_allow_html=True)
+    # 메인 루프: 한 번에 컬럼 3개를 생성하여 배치 (CSS가 모바일에서 이를 2열로 재배치함)
+    for i in range(0, len(st.session_state['results']), 3):
+        cols = st.columns(3)
+        for j in range(3):
+            idx = i + j
+            if idx < len(st.session_state['results']):
+                img = st.session_state['results'][idx]
+                with cols[j]:
+                    st.markdown('<div class="image-card-container">', unsafe_allow_html=True)
+                    img_style = "selected-img" if st.session_state.get(f"chk_{idx}", False) else ""
+                    st.markdown(f'<div class="{img_style}">', unsafe_allow_html=True)
+                    st.image(img['url'], use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="source-label">📍 {img["source"]}</div>', unsafe_allow_html=True)
+                    
+                    b_col1, b_col2 = st.columns([1, 1])
+                    with b_col1:
+                        if st.button("🔍 보기", key=f"btn_{idx}"): show_full_image(img['orig'], img['source'])
+                    with b_col2:
+                        st.checkbox("선택", key=f"chk_{idx}")
+                    st.markdown('</div>', unsafe_allow_html=True)
 
     if temp_sel:
         st.markdown("---")
