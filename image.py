@@ -3,11 +3,12 @@ import requests
 import zipfile
 from io import BytesIO
 from datetime import datetime, timedelta, timezone
+import time
 
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 기존 UI 유지 및 전체 선택 버튼 스타일 ---
+# --- CSS: 기존 UI 유지 ---
 st.markdown("""
     <style>
     /* 1. 상단 UI (PC 고정) */
@@ -60,7 +61,8 @@ st.markdown("""
         padding: 0 10px !important;
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify(content): center;
+        margin-top: 0px !important;
     }
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
         background-color: #2196F3 !important;
@@ -95,11 +97,15 @@ def on_ratio_change():
     else:
         st.session_state.width_input, st.session_state.height_input = 1080, 1080
 
-# 전체 선택/해제 토글 함수
+# 전체 선택/해제 토글 함수 (메시지 기능 추가)
 def toggle_all():
-    st.session_state.all_selected = not st.session_state.all_selected
-    for idx in range(len(st.session_state['results'])):
-        st.session_state[f"chk_{idx}"] = st.session_state.all_selected
+    msg_text = "전체 해제 중..." if st.session_state.all_selected else "전체 선택 중..."
+    with st.spinner(msg_text):
+        st.session_state.all_selected = not st.session_state.all_selected
+        for idx in range(len(st.session_state['results'])):
+            st.session_state[f"chk_{idx}"] = st.session_state.all_selected
+        # 처리가 너무 빨라 메시지가 안 보일 경우를 대비해 아주 짧은 지연 추가 (선택 사항)
+        time.sleep(0.3)
 
 @st.dialog("🔍 이미지 크게 보기", width="large")
 def show_full_image(img_url, source):
@@ -123,34 +129,29 @@ with st.container():
 
     if st.button("📸 사진 검색 시작", use_container_width=True):
         if query:
-            results = []
-            try:
-                p_key = st.secrets["PEXELS_API_KEY"]
-                px_key = st.secrets["PIXABAY_API_KEY"]
-                orient_map = {"가로형": "landscape", "세로형": "portrait", "정사각형": "square"}
-                p_res = requests.get(f"https://api.pexels.com/v1/search?query={query}&per_page={count}&orientation={orient_map[ratio_display]}", headers={"Authorization": p_key}).json()
-                for img in p_res.get('photos', []):
-                    if img['width'] >= min_w and img['height'] >= min_h:
-                        results.append({'url': img['src']['large'], 'orig': img['src']['original'], 'source': 'Pexels'})
-                px_res = requests.get(f"https://pixabay.com/api/?key={px_key}&q={query}&image_type=photo&orientation={orient_map[ratio_display]}&per_page={count}").json()
-                for img in px_res.get('hits', []):
-                    if img['imageWidth'] >= min_w and img['imageHeight'] >= min_h:
-                        results.append({'url': img['webformatURL'], 'orig': img['largeImageURL'], 'source': 'Pixabay'})
-            except: pass
-            st.session_state['results'] = results
-            st.session_state.all_selected = False # 검색 시 초기화
+            with st.spinner("이미지를 불러오는 중입니다..."):
+                results = []
+                try:
+                    p_key = st.secrets["PEXELS_API_KEY"]
+                    px_key = st.secrets["PIXABAY_API_KEY"]
+                    orient_map = {"가로형": "landscape", "세로형": "portrait", "정사각형": "square"}
+                    p_res = requests.get(f"https://api.pexels.com/v1/search?query={query}&per_page={count}&orientation={orient_map[ratio_display]}", headers={"Authorization": p_key}).json()
+                    for img in p_res.get('photos', []):
+                        if img['width'] >= min_w and img['height'] >= min_h:
+                            results.append({'url': img['src']['large'], 'orig': img['src']['original'], 'source': 'Pexels'})
+                    px_res = requests.get(f"https://pixabay.com/api/?key={px_key}&q={query}&image_type=photo&orientation={orient_map[ratio_display]}&per_page={count}").json()
+                    for img in px_res.get('hits', []):
+                        if img['imageWidth'] >= min_w and img['imageHeight'] >= min_h:
+                            results.append({'url': img['webformatURL'], 'orig': img['largeImageURL'], 'source': 'Pixabay'})
+                except: pass
+                st.session_state['results'] = results
+                st.session_state.all_selected = False
 
-    # 상단 정보 및 버튼 영역
     if st.session_state['results']:
-        # 현재 선택된 이미지 리스트
         temp_selected = [img for idx, img in enumerate(st.session_state['results']) if st.session_state.get(f"chk_{idx}", False)]
-        
-        # 3개 컬럼으로 분할 (결과 개수 | 전체선택 버튼 | 다운로드 버튼)
         inf_col1, inf_col2, inf_col3 = st.columns([1, 1, 1.5])
-        
         inf_col1.markdown(f"📊 검색: **{len(st.session_state['results'])}**장")
         
-        # 전체 선택 버튼 (검색 개수 바로 오른쪽)
         select_text = "✅ 전체 해제" if st.session_state.all_selected else "☑️ 전체 선택"
         inf_col2.button(select_text, on_click=toggle_all, use_container_width=True)
         
