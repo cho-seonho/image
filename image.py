@@ -8,26 +8,69 @@ import time
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# --- CSS: 모바일 2열 그리드 및 기존 UI 보존 ---
+# --- CSS: 모바일 2열 강제 및 UI 고정 해제 ---
 st.markdown("""
     <style>
-    /* 1. 상단 UI 고정 */
-    div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
-        position: sticky;
-        top: 0;
-        background-color: white;
-        z-index: 999;
-        padding: 10px 15px 15px 15px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
-        border-bottom: 1px solid #e1e4e8;
+    /* 1. 상단 UI 고정 (PC 전용) */
+    @media (min-width: 769px) {
+        div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 999;
+            padding: 10px 15px 15px 15px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
+            border-bottom: 1px solid #e1e4e8;
+        }
     }
 
-    /* 2. 이미지 카드 스타일 및 흔들림 방지 */
+    /* 2. 모바일 UI (고정 해제 및 2열 그리드 강제) */
+    @media (max-width: 768px) {
+        /* 상단 UI 고정 완전 해제 */
+        div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
+            position: relative !important;
+            top: auto !important;
+            box-shadow: none !important;
+            border-bottom: none !important;
+            padding: 10px 5px !important;
+        }
+
+        /* [핵심] 1개씩 나오는 현상 방지: 모든 컬럼 가로 배치 강제 */
+        div[data-testid="stHorizontalBlock"] {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+        }
+        
+        /* 메인 3열 중 각각을 50% 너비로 조정 (모바일은 2열이 됨) */
+        div[data-testid="column"] {
+            width: calc(50% - 10px) !important;
+            flex: 1 1 calc(50% - 10px) !important;
+            min-width: calc(50% - 10px) !important;
+        }
+
+        /* 모바일 보기 버튼 삭제 */
+        div[data-testid="column"]:has(button[key^="btn_"]) {
+            display: none !important;
+        }
+        
+        /* 선택 버튼 컬럼을 100%로 채워 버튼처럼 보이게 함 */
+        div[data-testid="column"]:has(div[data-testid="stCheckbox"]) {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+        
+        .image-card-container { padding: 10px !important; border-radius: 15px !important; }
+    }
+
+    /* 3. 공통 스타일: 사진 흔들림 방지 및 파란색 버튼 */
     .image-card-container {
         border: 1px solid #e1e4e8;
         border-radius: 20px;
         padding: 15px;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
         background-color: #ffffff;
         overflow: hidden;
     }
@@ -36,13 +79,10 @@ st.markdown("""
         filter: blur(5px) grayscale(40%);
         transition: filter 0.2s ease-in-out;
     }
-
-    /* 3. 파란색 박스 버튼 UI (웹/모바일 공통) */
     .stButton > button {
         height: 45px !important;
         border-radius: 12px !important;
         font-weight: bold !important;
-        width: 100% !important;
     }
     div[data-testid="stCheckbox"] {
         height: 45px !important;
@@ -52,7 +92,6 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-top: 0px !important;
         background-color: white;
     }
     div[data-testid="stCheckbox"]:has(input[aria-checked="true"]) {
@@ -63,35 +102,7 @@ st.markdown("""
         color: white !important;
         font-weight: bold !important;
     }
-
-    /* 4. [수정 핵심] 모바일 2열 그리드 강제 적용 */
-    @media (max-width: 768px) {
-        /* 결과물을 감싸는 컨테이너를 Grid로 변경 */
-        div[data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-wrap: wrap !important;
-            flex-direction: row !important;
-        }
-        /* 각 이미지 컬럼의 너비를 50%로 고정 */
-        div[data-testid="column"] {
-            width: 50% !important;
-            flex: 1 1 50% !important;
-            min-width: 50% !important;
-            padding: 5px !important;
-        }
-        /* 모바일에서 보기 버튼 삭제 */
-        div[data-testid="column"]:has(button[key^="btn_"]) {
-            display: none !important;
-        }
-        /* 선택 버튼을 100% 너비로 */
-        div[data-testid="column"]:has(div[data-testid="stCheckbox"]) {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-        }
-        .image-card-container { padding: 10px; border-radius: 15px; }
-    }
-
-    .source-label { font-size: 0.85rem; color: #666; margin: 10px 0; font-weight: bold; }
+    .source-label { font-size: 0.8rem; color: #666; margin: 5px 0; font-weight: bold; }
     .stImage img { border-radius: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -151,23 +162,22 @@ with st.container():
             with zipfile.ZipFile(zip_buf, "w") as zf:
                 for i, si in enumerate(temp_sel):
                     try:
-                        # [파일명 규격 보존]
                         file_name = f"{si['source']}_{query.replace(' ','_')}_{i+1:02d}_{now_str}.jpg"
                         zf.writestr(file_name, requests.get(si['orig']).content)
                     except: continue
             inf3.download_button(f"📥 {len(temp_sel)}장 다운로드", zip_buf.getvalue(), f"{query}_{now_str}.zip", use_container_width=True, key="top_dl")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 결과 출력 ---
+# --- 결과 출력 (모바일 2열 강제 구조) ---
 if st.session_state['results']:
-    # 메인 루프: 한 번에 컬럼 3개를 생성하여 배치 (CSS가 모바일에서 이를 2열로 재배치함)
-    for i in range(0, len(st.session_state['results']), 3):
-        cols = st.columns(3)
-        for j in range(3):
+    # 2개씩 묶어서 한 줄(st.columns)에 넣음으로써 모바일 2열을 확실하게 보장함
+    for i in range(0, len(st.session_state['results']), 2):
+        row_cols = st.columns(2)
+        for j in range(2):
             idx = i + j
             if idx < len(st.session_state['results']):
                 img = st.session_state['results'][idx]
-                with cols[j]:
+                with row_cols[j]:
                     st.markdown('<div class="image-card-container">', unsafe_allow_html=True)
                     img_style = "selected-img" if st.session_state.get(f"chk_{idx}", False) else ""
                     st.markdown(f'<div class="{img_style}">', unsafe_allow_html=True)
