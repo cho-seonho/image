@@ -6,9 +6,10 @@ from io import BytesIO
 # 페이지 설정
 st.set_page_config(page_title="이미지 수집기 Pro", page_icon="📸", layout="wide")
 
-# CSS: 디자인 최적화 및 카드 스타일 적용
+# CSS: 직관적인 카드 UI 및 요소 배치
 st.markdown("""
     <style>
+    /* 상단 UI 고정 */
     div[data-testid="stVerticalBlock"] > div:has(div.fixed-header) {
         position: sticky;
         top: 2.8rem;
@@ -18,42 +19,56 @@ st.markdown("""
         border-bottom: 2px solid #f0f2f6;
     }
     
-    /* 이미지 카드 스타일: 한 덩어리로 보이게 그림자 및 테두리 추가 */
+    /* 카드 전체 스타일 */
     .image-card {
         background-color: #ffffff;
-        border-radius: 15px;
-        padding: 15px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        border: 1px solid #f0f2f6;
-    }
-    
-    .image-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        border: 1px solid #e1e4e8;
+        padding: 10px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        position: relative;
     }
 
-    /* 출처 태그 스타일 */
-    .source-tag {
-        font-size: 0.75rem;
-        padding: 2px 10px;
-        border-radius: 20px;
-        background-color: #e9ecef;
-        color: #495057;
-        font-weight: 700;
-        margin-bottom: 10px;
-        display: inline-block;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    /* 이미지 스타일 */
+    .stImage img {
+        border-radius: 8px;
+        transition: 0.2s;
     }
+
+    /* 출처 태그 오버레이 (우측 상단) */
+    .source-overlay {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: bold;
+        z-index: 10;
+        pointer-events: none;
+    }
+
+    /* 하단 버튼 영역 간격 조절 */
+    .button-container {
+        margin-top: 8px;
+        display: flex;
+        gap: 5px;
+    }
+
+    .stButton>button { border-radius: 8px; height: 2.5em; font-size: 0.9rem; }
+    .stDownloadButton>button { background-color: #2196F3; color: white; border-radius: 8px; }
     
-    .stImage img { border-radius: 10px; cursor: zoom-in; }
-    .stButton>button { width: 100%; border-radius: 10px; font-weight: bold; }
-    .stDownloadButton>button { width: 100%; background-color: #2196F3; color: white; border-radius: 10px; }
-    
-    /* 체크박스 영역 정렬 */
-    .stCheckbox { margin-top: 10px; }
+    /* 체크박스 강조 */
+    div[data-testid="stCheckbox"] {
+        background-color: #f8f9fa;
+        padding: 5px 10px;
+        border-radius: 6px;
+        border: 1px solid #dee2e6;
+        width: 100%;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -62,7 +77,7 @@ try:
     PEXELS_API_KEY = st.secrets["PEXELS_API_KEY"]
     PIXABAY_API_KEY = st.secrets["PIXABAY_API_KEY"]
 except:
-    st.error("⚠️ API 키가 설정되지 않았습니다. Streamlit Secrets를 확인해주세요.")
+    st.error("⚠️ API 키가 설정되지 않았습니다.")
     st.stop()
 
 # 세션 상태 초기화
@@ -91,7 +106,7 @@ with st.container():
     st.title("📸 이미지 수집기 Pro")
     
     col_search, col_ratio = st.columns([3, 1])
-    query = col_search.text_input("🔍 검색어", placeholder="예: 바다, 커피", label_visibility="collapsed")
+    query = col_search.text_input("🔍 검색어", placeholder="어떤 이미지를 찾으시나요?", label_visibility="collapsed")
     ratio_display = col_ratio.selectbox("📐 비율", ["가로형", "세로형", "정사각형"], key="orient_select", on_change=on_ratio_change, label_visibility="collapsed")
     
     with st.expander("⚙️ 고급 필터 (해상도/개수)"):
@@ -100,7 +115,7 @@ with st.container():
         min_h = f2.number_input("세로(px)", key="height_input", step=1, format="%d")
         count = f3.slider("개수", 10, 80, 20)
 
-    btn_label = "✅ 분석 완료 (다시 검색)" if st.session_state.search_clicked else "📸 사진 검색 및 분석 시작"
+    btn_label = "✅ 검색 완료 (다시 검색)" if st.session_state.search_clicked else "📸 사진 검색 및 분석 시작"
     if st.button(btn_label):
         if query:
             st.session_state.search_clicked = True
@@ -128,35 +143,35 @@ with st.container():
         download_placeholder = inf3.empty()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 이미지 결과 영역 (카드 스타일 적용) ---
+# --- 이미지 결과 영역 ---
 if st.session_state['results']:
     selected_images = []
-    # 한 줄에 3개씩 배치
     cols = st.columns(3)
     
     for idx, img in enumerate(st.session_state['results']):
         with cols[idx % 3]:
-            # 커스텀 HTML 컨테이너 시작
+            # 카드 컨테이너 시작
             st.markdown(f'''
                 <div class="image-card">
-                    <span class="source-tag">{img["source"]}</span>
+                    <div class="source-overlay">{img["source"]}</div>
             ''', unsafe_allow_html=True)
             
+            # 이미지 출력
             st.image(img['url'], use_container_width=True)
             
-            # 카드 내부 버튼 배치
-            c1, c2 = st.columns([1, 1])
-            with c1:
-                if st.button("🔍 크게보기", key=f"exp_{idx}"):
+            # 버튼 영역
+            c_btn1, c_btn2 = st.columns([1, 1.2])
+            with c_btn1:
+                if st.button("🔍 보기", key=f"exp_{idx}"):
                     show_full_image(img['orig'], img['source'])
-            with c2:
-                if st.checkbox(f"선택하기", key=f"chk_{idx}"):
+            with c_btn2:
+                # 선택하기 텍스트를 포함한 직관적인 체크박스
+                if st.checkbox(f"저장선택", key=f"chk_{idx}"):
                     selected_images.append(img)
             
-            # 컨테이너 닫기
             st.markdown('</div>', unsafe_allow_html=True)
     
-    # 다운로드 로직 유지
+    # 다운로드 업데이트
     if selected_images:
         select_placeholder.write(f"📍 **{len(selected_images)}**장 선택됨")
         with download_placeholder:
@@ -168,6 +183,6 @@ if st.session_state['results']:
                         file_name = f"{i+1:02d}_{si['source']}.jpg"
                         zf.writestr(file_name, res.content)
                     except: continue
-            st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_출처포함.zip")
+            st.download_button(f"📥 {len(selected_images)}장 다운로드", data=zip_buffer.getvalue(), file_name=f"{query}_수집.zip")
     else:
         select_placeholder.write("📍 0장 선택됨")
